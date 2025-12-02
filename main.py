@@ -96,6 +96,74 @@ class DiaryAssistant:
                 f"{todo_count}个待办 / {record_count}条记录 / {thought_count}条想法"
             )
     
+    def process_daily_evaluations(self) -> bool:
+        """处理每日评价"""
+        Logger.log_separator(self.logger)
+        self.logger.info("🤖 检查每日评价...")
+        Logger.log_separator(self.logger)
+        
+        # 确保日记按时间排序
+        sorted_diaries = sorted(self.diaries, key=lambda x: x.date)
+        
+        count = 0
+        for i, diary in enumerate(sorted_diaries):
+            # 检查是否已有评价
+            if diary.ai_comment:
+                continue
+            
+            self.logger.info(f"[{i+1}/{len(sorted_diaries)}] 发现未评价日记: {diary.date.strftime('%Y-%m-%d')}")
+            
+            # 获取上下文
+            # 1. 历史周总结（这天所在周之前的周）
+            # 获取这天所在的周信息
+            current_week_info = self.weekly_manager.get_week_info(diary.date)
+            # 获取所有周总结
+            all_summaries = self.weekly_manager.get_all_summaries()
+            # 筛选出之前的周总结
+            historical_summaries = []
+            for week_info, summary in all_summaries:
+                # 只要周的结束时间早于当前周的开始时间，就算历史
+                if week_info.end_date < current_week_info.start_date:
+                    historical_summaries.append((week_info, summary))
+            
+            # 2. 本周日记（这天所在周，直到这天）
+            context_diaries = []
+            for d in sorted_diaries:
+                if d.date >= current_week_info.start_date and d.date <= diary.date:
+                    context_diaries.append(d)
+            
+            # 生成评价
+            evaluation = self.analyzer.generate_daily_evaluation(
+                diary,
+                context_diaries,
+                historical_summaries
+            )
+            
+            if evaluation:
+                # 追加到文件
+                if self.reader.append_ai_comment(diary.file_path, evaluation):
+                    self.logger.info(f"✓ 已添加评价到 {diary.file_path.name}")
+                    diary.ai_comment = evaluation # 更新内存中的对象
+                    count += 1
+                    
+                    # 测试阶段暂停
+                    self.logger.info("-" * Config.SEPARATOR_LENGTH)
+                    confirm = input("按回车继续下一篇，输入 'n' 退出每日评价生成: ")
+                    if confirm.lower() == 'n':
+                        self.logger.info("用户停止生成每日评价")
+                        break
+                else:
+                    self.logger.error(f"添加评价失败")
+            else:
+                self.logger.error(f"生成评价失败")
+        
+        if count == 0:
+            self.logger.info("✓ 所有日记都已有评价")
+        else:
+            self.logger.info(f"✓ 完成 {count} 篇日记的评价生成")
+            
+        return True
+
     def check_and_generate_weekly_summaries(self) -> bool:
         """检查并生成缺失的周总结"""
         Logger.log_separator(self.logger)
@@ -209,6 +277,10 @@ class DiaryAssistant:
             if not self.check_and_generate_weekly_summaries():
                 self.logger.error("周总结生成失败，程序终止")
                 return
+            
+            # 处理每日评价
+            if not self.process_daily_evaluations():
+                self.logger.error("每日评价生成失败")
             
             # 选择日记（这里已不需要，直接分析本周）
             # 分析日记（使用历史周总结+本周日记）

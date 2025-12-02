@@ -180,6 +180,86 @@ class DeepSeekAnalyzer:
             self.logger.error(f"生成周总结失败: {e}")
             return None
     
+    def generate_daily_evaluation(self, current_diary: DiaryEntry, context_diaries: List[DiaryEntry], weekly_summaries: List[tuple]) -> Optional[str]:
+        """生成每日评价和建议"""
+        self.logger.info(f"正在为 {current_diary.date.strftime('%Y-%m-%d')} 生成评价...")
+        
+        # 格式化历史周总结
+        historical_context = ""
+        if weekly_summaries:
+            historical_context = "\n## 📚 历史周总结\n\n"
+            for week_info, summary in weekly_summaries:
+                historical_context += f"### {week_info.year}年第{week_info.week}周 ({week_info.start_date.strftime('%m月%d日')}-{week_info.end_date.strftime('%m月%d日')})\n\n"
+                historical_context += summary + "\n\n" + "="*50 + "\n\n"
+        
+        # 格式化本周日记（包括今天）
+        current_week_content = ""
+        if context_diaries:
+            from diary_reader import DiaryReader
+            diary_reader = DiaryReader(Config.DIARY_DIR)
+            
+            current_week_content = "\n## 📝 本周日记（截至今日）\n\n"
+            for diary in context_diaries:
+                # format_diary_for_ai 已经排除了 AI 说 部分
+                diary_content = diary_reader.format_diary_for_ai(diary)
+                current_week_content += diary_content + "\n\n" + "="*50 + "\n\n"
+        
+        # 创建系统提示
+        system_prompt = """# 角色设定
+你是一位贴心的日记助手。
+
+## 任务
+阅读用户的历史周总结和本周日记，为**今天**的日记生成一份简短的评价和建议。
+
+## 要求
+1. **篇幅限制**：800字以内。
+2. **内容聚焦**：针对今天的日记内容，结合之前的背景。
+3. **语气风格**：亲切、鼓励、有洞察力。
+4. **输出格式**：直接输出评价和建议内容，不要包含标题（因为会被添加到 "## AI 说" 标题下）。"""
+        
+        # 创建用户消息
+        user_message = f"""今天是 {current_diary.date.strftime('%Y年%m月%d日')}。
+
+{historical_context}
+
+{current_week_content}
+
+请为今天的日记写一段评价和建议。"""
+        
+        try:
+            # 准备请求
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": self.model_name,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                "temperature": 0.8,
+                "max_tokens": 2000
+            }
+            
+            # 发送请求
+            start_time = time.time()
+            response = requests.post(self.api_url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
+            elapsed_time = time.time() - start_time
+            
+            response.raise_for_status()
+            result = response.json()
+            
+            evaluation = result['choices'][0]['message']['content']
+            
+            self.logger.info(f"评价生成完成，耗时: {elapsed_time:.2f}秒")
+            return evaluation
+            
+        except Exception as e:
+            self.logger.error(f"生成每日评价失败: {e}")
+            return None
+
     def analyze_with_weekly_summaries(self, current_week_diaries: List[DiaryEntry], 
                                      historical_summaries: List[tuple]) -> Optional[str]:
         """使用历史周总结和本周日记进行分析"""

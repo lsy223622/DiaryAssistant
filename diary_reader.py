@@ -20,6 +20,7 @@ class DiaryEntry:
         self.todos = []
         self.records = []
         self.thoughts = []
+        self.ai_comment = ""
         self.content = ""
         self.raw_content = ""
     
@@ -38,6 +39,7 @@ class DiaryReader:
         self.record_variants = ["随手记录", "记录", "record", "Record", "日志", "流水"]
         self.thought_variants = ["心情", "心情和想法", "想法", "thought", "Thought", "感悟", "思考"]
         self.attachment_variants = ["附件", "附件 / 链接", "attachments", "Attachments", "附件和链接"]
+        self.ai_comment_variants = ["AI 说", "AI说", "AI评价", "AI建议"]
     
     def read_diary_file(self, file_path: Path) -> Optional[DiaryEntry]:
         """读取单个日记文件"""
@@ -103,7 +105,47 @@ class DiaryReader:
         entry.todos = self._extract_section(main_content, self.todo_variants)
         entry.records = self._extract_section(main_content, self.record_variants)
         entry.thoughts = self._extract_section(main_content, self.thought_variants)
+        
+        # 提取AI评论（从原始内容中提取，因为它可能在附件之后）
+        entry.ai_comment = self._extract_section_text(content, self.ai_comment_variants)
+
+    def _extract_section_text(self, content: str, section_names: List[str]) -> str:
+        """提取特定部分的纯文本内容"""
+        for section_name in section_names:
+            # 尝试匹配 ## 标题 或 # 标题
+            patterns = [
+                rf'^##\s*{re.escape(section_name)}\s*$',
+                rf'^#\s*{re.escape(section_name)}\s*$'
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, content, re.MULTILINE | re.IGNORECASE)
+                if match:
+                    # 提取从这个标题到下一个标题或文件结束的内容
+                    start_pos = match.end()
+                    
+                    # 查找下一个标题开始位置
+                    next_title_pattern = r'^#+\s*'
+                    next_match = re.search(next_title_pattern, content[start_pos:], re.MULTILINE)
+                    
+                    if next_match:
+                        end_pos = start_pos + next_match.start()
+                        return content[start_pos:end_pos].strip()
+                    else:
+                        return content[start_pos:].strip()
+        return ""
     
+    def append_ai_comment(self, file_path: Path, comment: str) -> bool:
+        """向日记文件追加AI评论"""
+        try:
+            with open(file_path, 'a', encoding='utf-8') as f:
+                # 确保前面有换行
+                f.write(f"\n\n## AI 说\n\n{comment}\n")
+            return True
+        except Exception as e:
+            self.logger.error(f"追加AI评论失败 {file_path}: {e}")
+            return False
+
     def _extract_section(self, content: str, section_names: List[str]) -> List[str]:
         """提取特定部分的内容"""
         items = []
