@@ -24,7 +24,7 @@ class Config:
     # 路径配置
     BASE_DIR: Path = Path(__file__).parent
     DIARY_DIR: Path = BASE_DIR / "Daily"
-    OUTPUT_DIR: Path = BASE_DIR / "AI_Suggestion"
+    OUTPUT_DIR: Path = BASE_DIR / "Weekly_Analysis"
     WEEKLY_SUMMARY_DIR: Path = BASE_DIR / "Weekly_Summary"
     LOG_DIR: Path = BASE_DIR / "log"
     

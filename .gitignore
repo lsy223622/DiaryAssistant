@@ -167,7 +167,7 @@ test_*.py
 
 /Daily
 /log
-/AI_Suggestion
+/Weekly_Analysis
 /Weekly_Summary
 memory.txt
 config.py

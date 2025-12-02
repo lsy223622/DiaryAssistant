@@ -9,7 +9,7 @@ DiaryAssistant is a Python-based tool that analyzes personal markdown diaries us
   - **Parsing Logic**: Identifies sections like "待办", "记录", "想法", "附件", "AI 说" using regex and keyword variants.
 - **Analysis Engine**: `analyzer.py` interacts with the DeepSeek API (`deepseek-reasoner`).
   - **Retry Logic**: Implements a robust retry mechanism for API calls (`_send_request_with_retry`).
-  - **Output**: Saves weekly analysis to `AI_Suggestion/` and weekly summaries to `Weekly_Summary/`.
+  - **Output**: Saves weekly analysis to `Weekly_Analysis/` and weekly summaries to `Weekly_Summary/`.
 - **Weekly Management**: `weekly_summary.py` groups diaries by ISO weeks (Mon-Sun) and manages summary file paths.
 - **Configuration**: `config.py` manages paths and API settings.
 
@@ -50,6 +50,6 @@ DiaryAssistant is a Python-based tool that analyzes personal markdown diaries us
 
 ## Directory Structure
 - `Daily/`: Source markdown diaries.
-- `AI_Suggestion/`: Generated weekly analysis reports.
+- `Weekly_Analysis/`: Generated weekly analysis reports.
 - `Weekly_Summary/`: Generated weekly summaries.
 - `log/`: Application logs and request payloads.
