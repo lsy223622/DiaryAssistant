@@ -146,6 +146,12 @@ class DiaryAssistant:
                     diary.ai_comment = evaluation # 更新内存中的对象
                     count += 1
                     
+                    # 如果是周日，生成周分析报告
+                    if diary.date.weekday() == 6:
+                        self.logger.info("-" * Config.SEPARATOR_LENGTH)
+                        self.logger.info(f"📅 检测到周日 ({diary.date.strftime('%Y-%m-%d')})，正在生成周分析报告...")
+                        self.analyzer.generate_weekly_analysis(context_diaries, historical_summaries)
+                    
                     # 测试阶段暂停
                     self.logger.info("-" * Config.SEPARATOR_LENGTH)
                     confirm = input("按回车继续下一篇，输入 'n' 退出每日评价生成: ")
@@ -202,66 +208,6 @@ class DiaryAssistant:
         self.logger.info(f"✓ 所有周总结已生成完毕")
         return True
     
-    def analyze(self, diaries: List[DiaryEntry]) -> Optional[str]:
-        """分析日记（使用历史周总结+本周日记）"""
-        Logger.log_separator(self.logger)
-        self.logger.info("🔍 开始分析日记...")
-        Logger.log_separator(self.logger)
-        
-        try:
-            # 获取本周信息
-            from datetime import datetime
-            today = datetime.now()
-            current_week = self.weekly_manager.get_week_info(today)
-            
-            # 获取本周的日记
-            current_week_diaries = [d for d in diaries if current_week.start_date.date() <= d.date.date() <= current_week.end_date.date()]
-            
-            # 获取所有历史周总结
-            all_summaries = self.weekly_manager.get_all_summaries()
-            
-            self.logger.info(f"本周日记: {len(current_week_diaries)} 篇")
-            self.logger.info(f"历史周总结: {len(all_summaries)} 周")
-            
-            result = self.analyzer.analyze_with_weekly_summaries(
-                current_week_diaries, 
-                all_summaries
-            )
-            return result
-        except Exception as e:
-            self.logger.error(f"分析过程出错: {e}", exc_info=True)
-            return None
-    
-    def show_result(self, result: str):
-        """显示分析结果"""
-        if not result:
-            self.logger.error("❌ 分析失败")
-            return
-        
-        Logger.log_separator(self.logger)
-        self.logger.info("✅ 分析完成!")
-        Logger.log_separator(self.logger)
-        
-        # 显示结果预览
-        self.logger.info("")
-        self.logger.info("📄 分析结果预览:")
-        print("-" * Config.SEPARATOR_LENGTH)
-        
-        if len(result) > Config.PREVIEW_LENGTH:
-            print(result[:Config.PREVIEW_LENGTH] + "...")
-            print(f"\n... (内容较长，完整内容请查看保存的文件)")
-        else:
-            print(result)
-        
-        print("-" * Config.SEPARATOR_LENGTH)
-        
-        # 显示文件位置
-        self.logger.info("")
-        self.logger.info(f"📁 文件位置:")
-        self.logger.info(f"   每日分析: {Config.OUTPUT_DIR.absolute()}")
-        self.logger.info(f"   周总结: {Config.WEEKLY_SUMMARY_DIR.absolute()}")
-        self.logger.info(f"   请求日志: {Config.LOG_DIR.absolute()}")
-    
     def run(self):
         """运行主程序"""
         try:
@@ -282,12 +228,8 @@ class DiaryAssistant:
             if not self.process_daily_evaluations():
                 self.logger.error("每日评价生成失败")
             
-            # 选择日记（这里已不需要，直接分析本周）
-            # 分析日记（使用历史周总结+本周日记）
-            result = self.analyze(self.diaries)
-            
             # 显示结果
-            self.show_result(result)
+            # self.show_result(result)
             
             Logger.log_separator(self.logger)
             self.logger.info("✨ 程序执行完成")

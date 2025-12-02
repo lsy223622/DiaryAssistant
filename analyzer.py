@@ -260,12 +260,11 @@ class DeepSeekAnalyzer:
             self.logger.error(f"生成每日评价失败: {e}")
             return None
 
-    def analyze_with_weekly_summaries(self, current_week_diaries: List[DiaryEntry], 
+    def generate_weekly_analysis(self, week_diaries: List[DiaryEntry], 
                                      historical_summaries: List[tuple]) -> Optional[str]:
-        """使用历史周总结和本周日记进行分析"""
-        from datetime import datetime
+        """生成每周分析建议（在周日触发）"""
         
-        self.logger.info(f"开始分析 (历史周总结: {len(historical_summaries)} 周, 本周日记: {len(current_week_diaries)} 篇)")
+        self.logger.info(f"正在生成周分析 (历史周总结: {len(historical_summaries)} 周, 本周日记: {len(week_diaries)} 篇)")
         
         # 格式化历史周总结
         historical_context = ""
@@ -277,31 +276,30 @@ class DeepSeekAnalyzer:
         
         # 格式化本周日记
         current_week_content = ""
-        if current_week_diaries:
+        if week_diaries:
             from diary_reader import DiaryReader
             diary_reader = DiaryReader(Config.DIARY_DIR)
             
-            current_week_content = "\n## 📝 本周日记（截至今日）\n\n"
-            for diary in current_week_diaries:
+            current_week_content = "\n## 📝 本周日记\n\n"
+            for diary in week_diaries:
                 diary_content = diary_reader.format_diary_for_ai(diary)
                 current_week_content += diary_content + "\n\n" + "="*50 + "\n\n"
         
         # 创建系统提示
         system_prompt = f"""# 角色设定
-你是我最信任的日记伙伴。
-
-## 特点
-1. **富有同理心**：感受情绪，理解困惑
-2. **温和深刻**：温柔有深度，建议中肯
-3. **亲切自然**：像老朋友一样交流
-4. **鼓励为主**：关注进步，给予支持
+你是一位专业的个人成长顾问。
 
 ## 任务
-基于历史周总结和本周日记，对**本周（特别是今天）**的生活进行评价和建议。"""
+基于历史周总结和本周完整的日记，对**本周**进行深度分析，并提出下周的建议。
+
+## 要求
+1. **深度洞察**：发现行为模式和心理变化
+2. **建设性**：建议具体可行
+3. **前瞻性**：基于本周情况指导下周"""
 
         # 创建用户消息
-        today = datetime.now()
-        user_message = f"""今天是 {today.strftime('%Y年%m月%d日')}。
+        end_date = week_diaries[-1].date
+        user_message = f"""本周结束日期：{end_date.strftime('%Y年%m月%d日')}。
 
 为了让你了解我，我提供了历史周总结和本周日记。
 
@@ -309,61 +307,39 @@ class DeepSeekAnalyzer:
 
 {current_week_content}
 
-请分析**本周（特别是今天）**的情况：
-1. **感受**：我的情绪和状态变化
-2. **模式**：结合历史，有什么值得关注的变化
-3. **建议**：作为朋友的建议
-4. **感悟**：值得记住的时刻
+请对本周进行深度分析和建议：
+1. **本周复盘**：关键成就与不足
+2. **模式识别**：情绪、效率、习惯等方面的规律
+3. **下周建议**：具体的改进方向和行动计划
 
 请参考以下格式回复：
 
-# 生活分析
-[整体分析，结合历史，300-500字]
+# 本周深度复盘
+[分析内容，300-500字]
 
-# 关键发现
-## 生活模式
-- [发现1]
+# 模式与洞察
+## 情绪与状态
+- [分析]
 
-## 情绪状态
-- [发现1]
+## 效率与习惯
+- [分析]
 
-## 时间管理
-- [发现1]
+# 下周行动建议
+## 重点关注
+- [建议]
 
-# 深度反思
-## 值得思考的问题
-- [问题1]
-
-## 可能被忽视的模式
-- [模式1]
-
-# 具体建议
-## 短期行动
-- [建议1]
-
-## 长期方向
-- [方向1]
-
-## 习惯调整
-- [习惯1]
+## 具体行动
+- [行动]
 """
         
         # 保存请求日志
         payload = {
             "system_prompt": system_prompt,
             "user_message": user_message,
-            "diary_count": len(current_week_diaries),
+            "diary_count": len(week_diaries),
             "date_range": f"本周日记 + {len(historical_summaries)}周历史总结"
         }
         self.save_request_log(payload)
-        
-        # 等待用户确认
-        self.logger.info("-" * Config.SEPARATOR_LENGTH)
-        confirm = input("请输入 'y' 发送请求至 DeepSeek API，或输入 'n' 取消: ")
-        
-        if confirm.lower() != 'y':
-            self.logger.info("用户取消了请求")
-            return None
         
         self.logger.info("正在发送请求到 DeepSeek API...")
         
@@ -398,7 +374,7 @@ class DeepSeekAnalyzer:
             self.logger.info(f"响应长度: {len(analysis_result)} 字符")
             
             # 保存分析结果
-            self.save_analysis_result(analysis_result, current_week_diaries)
+            self.save_analysis_result(analysis_result, week_diaries)
             
             return analysis_result
             
