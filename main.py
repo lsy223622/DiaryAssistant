@@ -134,45 +134,6 @@ class DiaryAssistant:
         self.logger.info(f"✓ 所有周总结已生成完毕")
         return True
     
-    def select_diaries(self) -> Optional[List[DiaryEntry]]:
-        """让用户选择要分析的日记"""
-        Logger.log_separator(self.logger)
-        self.logger.info(f"共有 {len(self.diaries)} 篇日记")
-        self.logger.info(f"时间范围: {self.diaries[0].date.strftime('%Y-%m-%d')} 至 "
-                        f"{self.diaries[-1].date.strftime('%Y-%m-%d')}")
-        Logger.log_separator(self.logger)
-        
-        print(f"\n请选择分析范围:")
-        print(f"  1. 分析所有 {len(self.diaries)} 篇日记")
-        print(f"  2. 分析最近 N 篇日记")
-        print(f"  3. 退出程序")
-        
-        choice = input("\n请输入选项 (1-3): ").strip()
-        
-        if choice == '1':
-            return self.diaries
-        
-        elif choice == '2':
-            while True:
-                try:
-                    n = int(input(f"请输入要分析的日记数量 (1-{len(self.diaries)}): ").strip())
-                    if 1 <= n <= len(self.diaries):
-                        selected = self.diaries[-n:]
-                        self.logger.info(f"✓ 已选择最近 {n} 篇日记")
-                        return selected
-                    else:
-                        print(f"❌ 请输入 1 到 {len(self.diaries)} 之间的数字")
-                except ValueError:
-                    print("❌ 输入无效，请输入数字")
-        
-        elif choice == '3':
-            self.logger.info("用户选择退出")
-            return None
-        
-        else:
-            self.logger.warning(f"无效选项: {choice}，默认分析所有日记")
-            return self.diaries
-    
     def analyze(self, diaries: List[DiaryEntry]) -> Optional[str]:
         """分析日记（使用历史周总结+本周日记）"""
         Logger.log_separator(self.logger)
