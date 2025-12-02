@@ -94,6 +94,44 @@ class DeepSeekAnalyzer:
         except Exception as e:
             self.logger.error(f"保存分析结果时发生未知错误: {e}")
     
+    def _send_request_with_retry(self, data: Dict[str, Any], task_name: str = "请求") -> Optional[str]:
+        """发送API请求，带有重试逻辑"""
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        while True:
+            for attempt in range(3):
+                try:
+                    start_time = time.time()
+                    response = requests.post(self.api_url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
+                    elapsed_time = time.time() - start_time
+                    
+                    response.raise_for_status()
+                    result = response.json()
+                    
+                    content = result['choices'][0]['message']['content']
+                    self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒")
+                    return content
+                    
+                except Exception as e:
+                    self.logger.warning(f"{task_name}失败 (尝试 {attempt + 1}/3): {e}")
+                    if attempt < 2:
+                        time.sleep(2)
+            
+            # 3 retries failed
+            self.logger.error(f"{task_name}连续失败3次")
+            print("\n❌ 网络请求连续失败。")
+            choice = input("按回车键再次重试(3次)，输入 's' 跳过本次，输入 'q' 退出程序: ")
+            
+            if choice.lower() == 's':
+                return None
+            elif choice.lower() == 'q':
+                raise KeyboardInterrupt("用户主动停止")
+            
+            self.logger.info("正在重试...")
+
     def generate_weekly_summary(self, week_info: WeekInfo) -> Optional[str]:
         """生成周总结（不需要用户确认）"""
         if not week_info.diaries:
@@ -146,39 +184,18 @@ class DeepSeekAnalyzer:
 
 请生成周总结。"""
         
-        try:
-            # 准备请求
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": self.model_name,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 0.8,
-                "max_tokens": 4000
-            }
-            
-            # 发送请求
-            start_time = time.time()
-            response = requests.post(self.api_url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
-            elapsed_time = time.time() - start_time
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            summary = result['choices'][0]['message']['content']
-            
-            self.logger.info(f"周总结生成完成，耗时: {elapsed_time:.2f}秒")
-            return summary
-            
-        except Exception as e:
-            self.logger.error(f"生成周总结失败: {e}")
-            return None
+        # 准备请求数据
+        data = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 0.8,
+            "max_tokens": 4000
+        }
+        
+        return self._send_request_with_retry(data, "周总结生成")
     
     def generate_daily_evaluation(self, current_diary: DiaryEntry, context_diaries: List[DiaryEntry], weekly_summaries: List[tuple]) -> Optional[str]:
         """生成每日评价和建议"""
@@ -226,45 +243,24 @@ class DeepSeekAnalyzer:
 
 请为今天的日记写一段评价和建议。"""
         
-        try:
-            # 准备请求
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": self.model_name,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 0.8,
-                "max_tokens": 2000
-            }
-            
-            # 发送请求
-            start_time = time.time()
-            response = requests.post(self.api_url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
-            elapsed_time = time.time() - start_time
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            evaluation = result['choices'][0]['message']['content']
-            
-            self.logger.info(f"评价生成完成，耗时: {elapsed_time:.2f}秒")
-            return evaluation
-            
-        except Exception as e:
-            self.logger.error(f"生成每日评价失败: {e}")
-            return None
+        # 准备请求数据
+        data = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 0.8,
+            "max_tokens": 2000
+        }
+        
+        return self._send_request_with_retry(data, "每日评价生成")
 
     def generate_weekly_analysis(self, week_diaries: List[DiaryEntry], 
                                      historical_summaries: List[tuple]) -> Optional[str]:
         """生成每周分析建议（在周日触发）"""
         
-        self.logger.info(f"正在生成周分析 (历史周总结: {len(historical_summaries)} 周, 本周日记: {len(week_diaries)} 篇)")
+        self.logger.info(f"正在生成周分析 ( 历史周总结: {len(historical_summaries)} 周, 本周日记: {len(week_diaries)} 篇)")
         
         # 格式化历史周总结
         historical_context = ""
@@ -343,41 +339,22 @@ class DeepSeekAnalyzer:
         
         self.logger.info("正在发送请求到 DeepSeek API...")
         
-        try:
-            # 准备请求
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            data = {
-                "model": self.model_name,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "temperature": 1.0,
-                "max_tokens": Config.API_MAX_TOKENS
-            }
-            
-            # 发送请求
-            start_time = time.time()
-            response = requests.post(self.api_url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
-            elapsed_time = time.time() - start_time
-            
-            response.raise_for_status()
-            result = response.json()
-            
-            analysis_result = result['choices'][0]['message']['content']
-            
-            self.logger.info(f"分析完成！耗时: {elapsed_time:.2f}秒")
+        # 准备请求数据
+        data = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 1.0,
+            "max_tokens": Config.API_MAX_TOKENS
+        }
+        
+        analysis_result = self._send_request_with_retry(data, "周分析生成")
+        
+        if analysis_result:
             self.logger.info(f"响应长度: {len(analysis_result)} 字符")
-            
             # 保存分析结果
             self.save_analysis_result(analysis_result, week_diaries)
             
-            return analysis_result
-            
-        except Exception as e:
-            self.logger.error(f"API请求失败: {e}")
-            return None
+        return analysis_result
