@@ -101,6 +101,15 @@ class DeepSeekAnalyzer:
             "Content-Type": "application/json"
         }
         
+        # 计算提示词长度
+        prompt_length = 0
+        if 'messages' in data:
+            for message in data['messages']:
+                if 'content' in message:
+                    prompt_length += len(message['content'])
+        
+        self.logger.info(f"正在发送{task_name}，提示词长度: {prompt_length} 字符")
+        
         while True:
             for attempt in range(3):
                 try:
@@ -112,7 +121,8 @@ class DeepSeekAnalyzer:
                     result = response.json()
                     
                     content = result['choices'][0]['message']['content']
-                    self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒")
+                    response_length = len(content)
+                    self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复长度: {response_length} 字符")
                     return content
                     
                 except Exception as e:
@@ -353,7 +363,6 @@ class DeepSeekAnalyzer:
         analysis_result = self._send_request_with_retry(data, "周分析生成")
         
         if analysis_result:
-            self.logger.info(f"响应长度: {len(analysis_result)} 字符")
             # 保存分析结果
             self.save_analysis_result(analysis_result, week_diaries)
             
