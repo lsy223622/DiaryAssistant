@@ -152,12 +152,13 @@ class DiaryAssistant:
                         self.logger.info(f"📅 检测到周日 ({diary.date.strftime('%Y-%m-%d')})，正在生成周分析报告...")
                         self.analyzer.generate_weekly_analysis(context_diaries, historical_summaries)
                     
-                    # 测试阶段暂停
-                    self.logger.info("-" * Config.SEPARATOR_LENGTH)
-                    confirm = input("按回车继续下一篇，输入 'n' 退出每日评价生成: ")
-                    if confirm.lower() == 'n':
-                        self.logger.info("用户停止生成每日评价")
-                        break
+                    # 根据配置决定是否暂停
+                    if Config.PAUSE_AFTER_DAILY_EVALUATION:
+                        self.logger.info("-" * Config.SEPARATOR_LENGTH)
+                        confirm = input("按回车继续下一篇，输入 'n' 退出每日评价生成: ")
+                        if confirm.lower() == 'n':
+                            self.logger.info("用户停止生成每日评价")
+                            break
                 else:
                     self.logger.error(f"添加评价失败")
             else:

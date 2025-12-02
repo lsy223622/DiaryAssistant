@@ -36,6 +36,9 @@ class Config:
     # 显示配置
     PREVIEW_LENGTH: int = 500
     SEPARATOR_LENGTH: int = 60
+        
+    # 调试配置
+    PAUSE_AFTER_DAILY_EVALUATION: bool = False
     
     @classmethod
     def validate(cls) -> tuple[bool, Optional[str]]:
