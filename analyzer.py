@@ -18,8 +18,7 @@ from weekly_summary import WeekInfo
 class DeepSeekAnalyzer:
     """使用DeepSeek API分析日记"""
     
-    def __init__(self, memory_file: Path, log_dir: Path, output_dir: Path):
-        self.memory_file = memory_file
+    def __init__(self, log_dir: Path, output_dir: Path):
         self.log_dir = log_dir
         self.output_dir = output_dir
         self.logger = Logger.get_logger("Analyzer")
@@ -29,41 +28,7 @@ class DeepSeekAnalyzer:
         self.api_url = Config.DEEPSEEK_API_URL
         self.model_name = Config.DEEPSEEK_MODEL
     
-    def load_memory(self) -> str:
-        """加载记忆"""
-        if not self.memory_file.exists():
-            self.logger.info("记忆文件不存在，这是首次分析")
-            return "暂无长期记忆"
-        
-        try:
-            with open(self.memory_file, 'r', encoding='utf-8') as f:
-                memory = f.read()
-            self.logger.info(f"成功加载记忆，长度: {len(memory)} 字符")
-            return memory.strip()
-        except IOError as e:
-            self.logger.error(f"读取记忆文件失败: {e}")
-            return "暂无长期记忆"
-        except Exception as e:
-            self.logger.error(f"加载记忆时发生未知错误: {e}")
-            return "暂无长期记忆"
-    
-    def save_memory(self, memory: str):
-        """保存记忆"""
-        if not memory or not memory.strip():
-            self.logger.warning("记忆内容为空，跳过保存")
-            return
-        
-        try:
-            with open(self.memory_file, 'a', encoding='utf-8') as f:  # 追加模式
-                f.write(f"\n\n[更新于 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]\n")
-                f.write(memory)
-            self.logger.info(f"记忆已更新到: {self.memory_file}")
-        except IOError as e:
-            self.logger.error(f"保存记忆失败: {e}")
-        except Exception as e:
-            self.logger.error(f"保存记忆时发生未知错误: {e}")
-    
-    def create_request_payload(self, diaries: List[DiaryEntry], memory: str = "") -> Dict[str, Any]:
+    def create_request_payload(self, diaries: List[DiaryEntry]) -> Dict[str, Any]:
         """创建API请求内容"""
         
         # 格式化所有日记内容
@@ -93,9 +58,6 @@ class DeepSeekAnalyzer:
 2. **温和而深刻**：你说话温柔但不失深度，建议中肯但不刻板
 3. **如朋友般亲切**：你不是冷冰冰的AI，而是像老朋友一样了解我
 4. **鼓励而非评判**：你更关注我的进步和努力，而不是批评不足
-
-## 你的长期记忆（关于我）
-{memory if memory else "这是我们第一次深入交流，我很期待了解你。"}
 
 ## 你的任务
 请以朋友的身份，阅读我{diary_count}篇日记（从{start_date}到{end_date}），然后：
@@ -166,11 +128,6 @@ class DeepSeekAnalyzer:
 
 ## 习惯调整建议
 - [习惯1]
-
-# 记忆更新
-[这里列出需要记住的重要信息，每个记忆点用-开头，简洁明了]
-[请整理出你认为比较重要的经历、想法等内容，方便你之后回忆时使用]
-[这部分不能改变格式，方便提取保存为长期记忆]
 """
 
         return {
@@ -217,12 +174,9 @@ class DeepSeekAnalyzer:
         
         self.logger.info(f"开始分析 {len(diaries)} 篇日记")
         
-        # 加载记忆
-        memory = self.load_memory()
-        
         # 创建请求内容
         try:
-            payload = self.create_request_payload(diaries, memory)
+            payload = self.create_request_payload(diaries)
         except Exception as e:
             self.logger.error(f"创建请求失败: {e}")
             return None
@@ -277,9 +231,6 @@ class DeepSeekAnalyzer:
             
             # 保存分析结果
             self.save_analysis_result(analysis_result, diaries)
-            
-            # 提取记忆更新并保存
-            self.extract_and_save_memories(analysis_result)
             
             return analysis_result
             
@@ -337,24 +288,6 @@ class DeepSeekAnalyzer:
             self.logger.error(f"保存分析结果失败: {e}")
         except Exception as e:
             self.logger.error(f"保存分析结果时发生未知错误: {e}")
-    
-    def extract_and_save_memories(self, analysis: str):
-        """从分析结果中提取记忆并保存"""
-        import re
-        
-        # 查找记忆更新部分
-        memory_pattern = r'# 记忆更新\s*\n(.*?)(?=\n# |\Z)'
-        match = re.search(memory_pattern, analysis, re.DOTALL | re.IGNORECASE)
-        
-        if match:
-            memory_text = match.group(1).strip()
-            if memory_text:
-                self.logger.info(f"提取到记忆更新: {len(memory_text)} 字符")
-                self.save_memory(memory_text)
-            else:
-                self.logger.warning("记忆更新部分为空")
-        else:
-            self.logger.warning("分析结果中未找到记忆更新部分")
     
     def generate_weekly_summary(self, week_info: WeekInfo) -> Optional[str]:
         """生成周总结（不需要用户确认）"""
@@ -454,9 +387,6 @@ class DeepSeekAnalyzer:
         
         self.logger.info(f"开始分析 (历史周总结: {len(historical_summaries)} 周, 本周日记: {len(current_week_diaries)} 篇)")
         
-        # 加载记忆
-        memory = self.load_memory()
-        
         # 格式化历史周总结
         historical_context = ""
         if historical_summaries:
@@ -485,9 +415,6 @@ class DeepSeekAnalyzer:
 2. **温和而深刻**：你说话温柔但不失深度，建议中肯但不刻板
 3. **如朋友般亲切**：你不是冷冰冰的AI，而是像老朋友一样了解我
 4. **鼓励而非评判**：你更关注我的进步和努力，而不是批评不足
-
-## 你的长期记忆（关于我）
-{memory if memory else "这是我们第一次深入交流，我很期待了解你。"}
 
 ## 重要说明
 你现在收到的是：
@@ -547,11 +474,6 @@ class DeepSeekAnalyzer:
 
 ## 习惯调整建议
 - [习惯1]
-
-# 记忆更新
-[这里列出需要记住的重要信息，每个记忆点用-开头，简洁明了]
-[请整理出你认为比较重要的经历、想法等内容，方便你之后回忆时使用]
-[这部分不能改变格式，方便提取保存为长期记忆]
 """
         
         # 保存请求日志
@@ -605,9 +527,6 @@ class DeepSeekAnalyzer:
             
             # 保存分析结果
             self.save_analysis_result(analysis_result, current_week_diaries)
-            
-            # 提取记忆更新并保存
-            self.extract_and_save_memories(analysis_result)
             
             return analysis_result
             

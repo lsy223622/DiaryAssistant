@@ -45,7 +45,6 @@ class DiaryAssistant:
         try:
             self.reader = DiaryReader(Config.DIARY_DIR)
             self.analyzer = DeepSeekAnalyzer(
-                Config.MEMORY_FILE,
                 Config.LOG_DIR,
                 Config.OUTPUT_DIR
             )
@@ -233,7 +232,6 @@ class DiaryAssistant:
         self.logger.info(f"   每日分析: {Config.OUTPUT_DIR.absolute()}")
         self.logger.info(f"   周总结: {Config.WEEKLY_SUMMARY_DIR.absolute()}")
         self.logger.info(f"   请求日志: {Config.LOG_DIR.absolute()}")
-        self.logger.info(f"   记忆文件: {Config.MEMORY_FILE.absolute()}")
     
     def run(self):
         """运行主程序"""

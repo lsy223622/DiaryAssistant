@@ -27,7 +27,6 @@ class Config:
     OUTPUT_DIR: Path = BASE_DIR / "AI_Suggestion"
     WEEKLY_SUMMARY_DIR: Path = BASE_DIR / "Weekly_Summary"
     LOG_DIR: Path = BASE_DIR / "log"
-    MEMORY_FILE: Path = BASE_DIR / "memory.txt"
     
     # 日志配置
     LOG_LEVEL: str = "INFO"
