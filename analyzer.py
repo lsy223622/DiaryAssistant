@@ -223,7 +223,7 @@ class DeepSeekAnalyzer:
         current_week_content = ""
         if context_diaries:
             from diary_reader import DiaryReader
-            diary_reader = DiaryReader(Config.DIARY_DIR)
+            diary_reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
             
             current_week_content = "\n## 📝 本周日记（截至今日）\n\n"
             for diary in context_diaries:
@@ -284,7 +284,7 @@ class DeepSeekAnalyzer:
         current_week_content = ""
         if week_diaries:
             from diary_reader import DiaryReader
-            diary_reader = DiaryReader(Config.DIARY_DIR)
+            diary_reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
             
             current_week_content = "\n## 📝 本周日记\n\n"
             for diary in week_diaries:

@@ -30,8 +30,8 @@ class DiaryEntry:
 class DiaryReader:
     """读取和解析日记文件"""
     
-    def __init__(self, diary_dir: Path):
-        self.diary_dir = diary_dir
+    def __init__(self, diary_dirs: List[Path]):
+        self.diary_dirs = diary_dirs
         self.logger = Logger.get_logger("DiaryReader")
         
         # 支持的所有标题变体
@@ -219,16 +219,28 @@ class DiaryReader:
         diaries = []
         
         # 查找所有md文件
-        try:
-            md_files = list(self.diary_dir.glob("*.md"))
-            self.logger.info(f"找到 {len(md_files)} 个日记文件")
-        except Exception as e:
-            self.logger.error(f"读取日记目录失败: {e}")
-            return diaries
+        md_files = []
+        for diary_dir in self.diary_dirs:
+            try:
+                if diary_dir.exists():
+                    files = list(diary_dir.glob("*.md"))
+                    md_files.extend(files)
+                    self.logger.info(f"在 {diary_dir.name} 中找到 {len(files)} 个日记文件")
+                else:
+                    self.logger.warning(f"目录不存在: {diary_dir}")
+            except Exception as e:
+                self.logger.error(f"读取日记目录失败 {diary_dir}: {e}")
+        
+        self.logger.info(f"总共找到 {len(md_files)} 个日记文件")
         
         # 逐个读取
         success_count = 0
         for file_path in md_files:
+            # 忽略以x结尾的文件
+            if file_path.stem.endswith('x'):
+                self.logger.debug(f"跳过未完成日记: {file_path.name}")
+                continue
+
             diary = self.read_diary_file(file_path)
             if diary:
                 diaries.append(diary)
@@ -239,7 +251,11 @@ class DiaryReader:
         
         self.logger.info(f"成功解析 {success_count}/{len(md_files)} 篇日记")
         if success_count < len(md_files):
-            self.logger.warning(f"有 {len(md_files) - success_count} 篇日记解析失败")
+            # 计算实际跳过的文件数（x结尾的）
+            skipped_count = sum(1 for f in md_files if f.stem.endswith('x'))
+            failed_count = len(md_files) - success_count - skipped_count
+            if failed_count > 0:
+                self.logger.warning(f"有 {failed_count} 篇日记解析失败")
         
         return diaries
     

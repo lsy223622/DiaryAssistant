@@ -9,6 +9,7 @@ from typing import List, Dict, Optional, Tuple
 
 from diary_reader import DiaryEntry
 from logger import Logger
+from config import Config
 
 
 class WeekInfo:
@@ -185,7 +186,7 @@ class WeeklySummaryManager:
         """格式化周日记内容用于AI生成总结"""
         from diary_reader import DiaryReader
         
-        diary_reader = DiaryReader(Path("./Daily"))
+        diary_reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
         
         formatted = f"""# {week_info.year}年第{week_info.week}周日记
 **时间范围**: {week_info.start_date.strftime('%Y年%m月%d日')} 至 {week_info.end_date.strftime('%Y年%m月%d日')}

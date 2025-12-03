@@ -38,12 +38,12 @@ class DiaryAssistant:
             self.logger.error(f"配置验证失败: {error_msg}")
             return False
         
-        self.logger.info(f"日记目录: {Config.DIARY_DIR}")
+        self.logger.info(f"日记目录: {Config.DIARY_DIR}, {Config.DIARY_OLD_DIR}")
         self.logger.info(f"输出目录: {Config.OUTPUT_DIR}")
         
         # 初始化组件
         try:
-            self.reader = DiaryReader(Config.DIARY_DIR)
+            self.reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
             self.analyzer = DeepSeekAnalyzer(
                 Config.LOG_DIR,
                 Config.OUTPUT_DIR

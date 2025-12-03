@@ -18,12 +18,13 @@ class Config:
     
     # API参数
     API_TIMEOUT: int = 180
-    API_TEMPERATURE: float = 0.75
+    API_TEMPERATURE: float = 1.0
     API_MAX_TOKENS: int = 8000
     
     # 路径配置
     BASE_DIR: Path = Path(__file__).parent
     DIARY_DIR: Path = BASE_DIR / "Daily"
+    DIARY_OLD_DIR: Path = BASE_DIR / "Daily_Old"
     OUTPUT_DIR: Path = BASE_DIR / "Weekly_Analysis"
     WEEKLY_SUMMARY_DIR: Path = BASE_DIR / "Weekly_Summary"
     LOG_DIR: Path = BASE_DIR / "log"
