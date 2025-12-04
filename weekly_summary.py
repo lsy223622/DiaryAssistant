@@ -9,7 +9,6 @@ from typing import List, Dict, Optional, Tuple
 
 from diary_reader import DiaryEntry
 from logger import Logger
-from config import Config
 
 
 class WeekInfo:
