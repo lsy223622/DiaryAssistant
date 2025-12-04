@@ -170,3 +170,4 @@ test_*.py
 /Weekly_Analysis
 /Weekly_Summary
 config.py
+user_profile.json
