@@ -4,6 +4,7 @@
 """
 
 import json
+import difflib
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -102,7 +103,22 @@ class UserProfile:
                     self.facts.remove(candidates[0])
                     count += 1
                 else:
-                    self.logger.warning(f"无法找到要删除的记忆: {fact}")
+                    # 尝试使用 difflib 进行相似度匹配
+                    best_ratio = 0
+                    best_match = None
+                    
+                    for f in self.facts:
+                        ratio = difflib.SequenceMatcher(None, fact, f).ratio()
+                        if ratio > best_ratio:
+                            best_ratio = ratio
+                            best_match = f
+                    
+                    if best_ratio > 0.8:
+                        self.logger.info(f"模糊匹配删除成功 (相似度 {best_ratio:.2f}): '{fact}' -> '{best_match}'")
+                        self.facts.remove(best_match)
+                        count += 1
+                    else:
+                        self.logger.warning(f"无法找到要删除的记忆: {fact}")
         return count
 
     def _handle_update(self, updates: List[Dict]) -> int:
@@ -126,5 +142,23 @@ class UserProfile:
                     self.facts[idx] = original.replace(old_fact, new_fact)
                     count += 1
                 else:
-                    self.logger.warning(f"无法找到要更新的记忆: {old_fact}")
+                    # 尝试使用 difflib 进行相似度匹配
+                    # 当 LLM 返回的 old_fact 与现有记忆有轻微差异（如标点、个别字词）时使用
+                    best_ratio = 0
+                    best_idx = -1
+                    
+                    for i, f in enumerate(self.facts):
+                        ratio = difflib.SequenceMatcher(None, old_fact, f).ratio()
+                        if ratio > best_ratio:
+                            best_ratio = ratio
+                            best_idx = i
+                    
+                    # 阈值设定为 0.8，确保匹配度足够高
+                    if best_ratio > 0.8:
+                        self.logger.info(f"模糊匹配成功 (相似度 {best_ratio:.2f}):\n原句: {old_fact}\n匹配: {self.facts[best_idx]}")
+                        # 在这种情况下，通常 old_fact 是对整条记忆的复述，所以直接替换整条记忆
+                        self.facts[best_idx] = new_fact
+                        count += 1
+                    else:
+                        self.logger.warning(f"无法找到要更新的记忆: {old_fact}")
         return count
