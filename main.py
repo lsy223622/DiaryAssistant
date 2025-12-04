@@ -16,6 +16,7 @@ from analyzer import DeepSeekAnalyzer
 from config import Config
 from logger import Logger
 from weekly_summary import WeeklySummaryManager
+from user_profile import UserProfile
 
 
 class DiaryAssistant:
@@ -26,6 +27,7 @@ class DiaryAssistant:
         self.reader: Optional[DiaryReader] = None
         self.analyzer: Optional[DeepSeekAnalyzer] = None
         self.weekly_manager: Optional[WeeklySummaryManager] = None
+        self.user_profile: Optional[UserProfile] = None
         self.diaries: List[DiaryEntry] = []
     
     def initialize(self) -> bool:
@@ -44,9 +46,15 @@ class DiaryAssistant:
         # 初始化组件
         try:
             self.reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
+            
+            # 初始化用户画像
+            profile_path = Config.BASE_DIR / "user_profile.json"
+            self.user_profile = UserProfile(profile_path)
+            
             self.analyzer = DeepSeekAnalyzer(
                 Config.LOG_DIR,
-                Config.OUTPUT_DIR
+                Config.OUTPUT_DIR,
+                self.user_profile
             )
             self.weekly_manager = WeeklySummaryManager(Config.WEEKLY_SUMMARY_DIR)
             self.logger.info("组件初始化成功")

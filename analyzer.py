@@ -8,19 +8,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import requests
+import re
+import json
 
 from diary_reader import DiaryEntry
 from config import Config
 from logger import Logger
 from weekly_summary import WeekInfo
+from user_profile import UserProfile
 
 
 class DeepSeekAnalyzer:
     """使用DeepSeek API分析日记"""
     
-    def __init__(self, log_dir: Path, output_dir: Path):
+    def __init__(self, log_dir: Path, output_dir: Path, user_profile: Optional[UserProfile] = None):
         self.log_dir = log_dir
         self.output_dir = output_dir
+        self.user_profile = user_profile
         self.logger = Logger.get_logger("Analyzer")
         
         # 从配置读取API设置
@@ -248,18 +252,43 @@ class DeepSeekAnalyzer:
                 diary_content = diary.format_for_ai()
                 current_week_content += diary_content + "\n\n" + "="*50 + "\n\n"
         
+        # 用户画像上下文
+        profile_context = ""
+        if self.user_profile:
+            profile_context = f"\n## 👤 用户画像 (长期记忆)\n{self.user_profile.get_profile_text()}\n"
+
         # 创建系统提示
-        system_prompt = """# 角色设定
+        system_prompt = f"""# 角色设定
 你是一位贴心的日记助手。
 
 ## 任务
-阅读用户的历史周总结和本周日记，为**今天**的日记生成一份简短的评价和建议。
+阅读用户的历史周总结、本周日记以及用户画像，为**今天**的日记生成一份简短的评价和建议。
 
 ## 要求
 1. **篇幅限制**：800字以内。
 2. **内容聚焦**：针对今天的日记内容，结合之前的背景。
 3. **语气风格**：亲切、鼓励、有洞察力。
-4. **输出格式**：直接输出评价和建议内容，不要包含标题（因为会被添加到 "## AI 说" 标题下）。"""
+4. **输出格式**：直接输出评价和建议内容，不要包含标题（因为会被添加到 "## AI 说" 标题下）。
+
+{profile_context}
+
+## 记忆更新功能
+如果你从今天的日记中发现了关于用户的新事实（如新的长期目标、重要关系、健康状况、喜好厌恶等），或者发现旧的记忆已过时，请在回复的**最后**，使用 JSON 格式输出记忆更新指令。
+格式如下：
+```json
+{{
+    "memory_updates": {{
+        "add": ["新事实1", "新事实2"],
+        "remove": ["过时事实1"],
+        "update": [{{"old": "旧事实", "new": "新事实"}}]
+    }}
+}}
+```
+如果没有更新，则不需要输出此 JSON 块。
+注意：
+1. 只记录长期有价值的信息，不要记录琐碎日常。
+2. "remove" 和 "update" 中的 "old" 必须与"用户画像"中列出的文本完全一致。
+"""
         
         # 创建用户消息
         user_message = f"""今天是 {current_diary.date.strftime('%Y年%m月%d日')}。
@@ -281,7 +310,23 @@ class DeepSeekAnalyzer:
             "max_tokens": 2000
         }
         
-        return self._send_request_with_retry(data, "每日评价生成")
+        content = self._send_request_with_retry(data, "每日评价生成")
+        
+        if content and self.user_profile:
+            # 提取并处理 JSON
+            json_match = re.search(r'```json\s*(\{.*?"memory_updates".*?\})\s*```', content, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+                try:
+                    updates = json.loads(json_str)
+                    if "memory_updates" in updates:
+                        self.user_profile.update(updates["memory_updates"])
+                    # 从内容中移除 JSON 块
+                    content = content.replace(json_match.group(0), "").strip()
+                except Exception as e:
+                    self.logger.error(f"处理记忆更新失败: {e}")
+        
+        return content
 
     def generate_weekly_analysis(self, week_diaries: List[DiaryEntry], 
                                      historical_summaries: List[tuple]) -> Optional[str]:
