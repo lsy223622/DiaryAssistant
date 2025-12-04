@@ -27,6 +27,10 @@ class DeepSeekAnalyzer:
         self.user_profile = user_profile
         self.logger = Logger.get_logger("Analyzer")
         
+        # 创建交互日志目录
+        self.interaction_log_dir = self.log_dir / "api_interactions"
+        self.interaction_log_dir.mkdir(parents=True, exist_ok=True)
+        
         # 从配置读取API设置
         self.api_key = Config.get_api_key()
         self.api_url = Config.DEEPSEEK_API_URL
@@ -322,6 +326,10 @@ class DeepSeekAnalyzer:
                     elapsed_time = time.time() - start_time
                     response_length = len(content)
                     self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复长度: {response_length} 字符")
+                    
+                    # 保存交互日志
+                    self._save_interaction_log(data, content, task_name)
+                    
                     return content
                     
                 except Exception as e:
@@ -341,6 +349,39 @@ class DeepSeekAnalyzer:
             
             self.logger.info("正在重试...")
 
+    def _save_interaction_log(self, data: Dict[str, Any], response: str, task_name: str):
+        """保存完整的请求和响应内容"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # 简单的文件名清理
+        safe_task_name = re.sub(r'[\\/*?:"<>|]', '_', task_name)
+        filename = f"{timestamp}_{safe_task_name}.txt"
+        filepath = self.interaction_log_dir / filename
+        
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Task: {task_name}\n")
+                f.write(f"Model: {data.get('model', 'unknown')}\n")
+                f.write("="*40 + " REQUEST " + "="*40 + "\n")
+                
+                if 'messages' in data:
+                    for msg in data['messages']:
+                        role = msg.get('role', 'unknown')
+                        content = msg.get('content', '')
+                        f.write(f"\n[{role.upper()}]\n")
+                        f.write("-" * 20 + "\n")
+                        f.write(content + "\n")
+                else:
+                    f.write(json.dumps(data, ensure_ascii=False, indent=2))
+
+                f.write("\n" + "="*40 + " RESPONSE " + "="*40 + "\n\n")
+                f.write(response + "\n")
+                f.write("\n" + "="*89 + "\n")
+                
+            self.logger.debug(f"交互日志已保存: {filepath}")
+        except Exception as e:
+            self.logger.error(f"保存交互日志失败: {e}")
+    
     def generate_weekly_summary(self, week_info: WeekInfo) -> Optional[str]:
         """生成周总结（不需要用户确认）"""
         if not week_info.diaries:
