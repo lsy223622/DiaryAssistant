@@ -109,6 +109,16 @@ class DeepSeekAnalyzer:
 
         self.logger.info(f"⚠️ 记忆库过大 ({current_length} 字 > 4000 字)，开始自动整理...")
         
+        # 备份当前记忆
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = self.log_dir / f"memory_backup_{timestamp}.json"
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                json.dump(self.user_profile.facts, f, ensure_ascii=False, indent=2)
+            self.logger.info(f"已备份当前记忆到: {backup_path}")
+        except Exception as e:
+            self.logger.error(f"备份记忆失败: {e}")
+        
         # 1. 尝试压缩整理
         new_facts = self._compress_memory(self.user_profile.facts)
         if new_facts:
