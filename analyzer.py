@@ -341,7 +341,6 @@ class DeepSeekAnalyzer:
                         completion_tokens = usage_info.get('completion_tokens', 0)
                         total_tokens = usage_info.get('total_tokens', 0)
                         self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复: {response_length}字，Token: {prompt_tokens}+{completion_tokens}={total_tokens}")
-                        print(f"📊 Token使用: 提问 {prompt_tokens} + 回答 {completion_tokens} = 总计 {total_tokens}")
                     else:
                         self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复长度: {response_length} 字符")
                     
