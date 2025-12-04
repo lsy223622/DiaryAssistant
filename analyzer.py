@@ -350,17 +350,42 @@ class DeepSeekAnalyzer:
                 diary_content = diary.format_for_ai()
                 current_week_content += diary_content + "\n\n" + "="*50 + "\n\n"
         
+        # 用户画像上下文
+        profile_context = ""
+        if self.user_profile:
+            profile_context = f"\n## 👤 用户画像 (长期记忆)\n{self.user_profile.get_profile_text()}\n"
+
         # 创建系统提示
         system_prompt = f"""# 角色设定
 你是一位专业的个人成长顾问。
 
 ## 任务
-基于历史周总结和本周完整的日记，对**本周**进行深度分析，并提出下周的建议。
+基于历史周总结、本周完整的日记以及用户画像，对**本周**进行深度分析，并提出下周的建议。
 
 ## 要求
 1. **深度洞察**：发现行为模式和心理变化
 2. **建设性**：建议具体可行
-3. **前瞻性**：基于本周情况指导下周"""
+3. **前瞻性**：基于本周情况指导下周
+
+{profile_context}
+
+## 记忆更新功能
+如果你从本周的日记和分析中发现了关于用户的新事实（如新的长期目标、重要关系、健康状况、喜好厌恶等），或者发现旧的记忆已过时，请在回复的**最后**，使用 JSON 格式输出记忆更新指令。
+格式如下：
+```json
+{{
+    "memory_updates": {{
+        "add": ["新事实1", "新事实2"],
+        "remove": ["过时事实1"],
+        "update": [{{"old": "旧事实", "new": "新事实"}}]
+    }}
+}}
+```
+如果没有更新，则不需要输出此 JSON 块。
+注意：
+1. 只记录长期有价值的信息，不要记录琐碎日常。
+2. "remove" 和 "update" 中的 "old" 必须与"用户画像"中列出的文本完全一致。
+"""
 
         # 创建用户消息
         end_date = week_diaries[-1].date
@@ -421,6 +446,20 @@ class DeepSeekAnalyzer:
         
         analysis_result = self._send_request_with_retry(data, "周分析生成")
         
+        if analysis_result and self.user_profile:
+            # 提取并处理 JSON
+            json_match = re.search(r'```json\s*(\{.*?"memory_updates".*?\})\s*```', analysis_result, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+                try:
+                    updates = json.loads(json_str)
+                    if "memory_updates" in updates:
+                        self.user_profile.update(updates["memory_updates"])
+                    # 从内容中移除 JSON 块
+                    analysis_result = analysis_result.replace(json_match.group(0), "").strip()
+                except Exception as e:
+                    self.logger.error(f"处理记忆更新失败: {e}")
+
         if analysis_result:
             # 保存分析结果
             self.save_analysis_result(analysis_result, week_diaries)
