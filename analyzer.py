@@ -185,15 +185,43 @@ class MemoryManager:
         self.logger.info(f"⚠️ 记忆库过大 ({current_length} 字)，开始自动整理...")
         self._backup_memory()
         
-        # 尝试压缩
-        for attempt in range(3):
-            self.logger.info(f"正在进行记忆整理 (尝试 {attempt + 1}/3)...")
-            new_facts = self._compress_memory()
-            if new_facts and sum(len(f) for f in new_facts) >= 1400:
-                self.user_profile.update_facts(new_facts)
-                current_length = self.user_profile.get_profile_length()
-                self.logger.info(f"✓ 记忆整理完成，当前字数: {current_length}")
+        while True:
+            success = False
+            # 尝试压缩
+            for attempt in range(3):
+                self.logger.info(f"正在进行记忆整理 (尝试 {attempt + 1}/3)...")
+                new_facts = self._compress_memory()
+                if new_facts and sum(len(f) for f in new_facts) >= 1200:
+                    self.user_profile.update_facts(new_facts)
+                    current_length = self.user_profile.get_profile_length()
+                    self.logger.info(f"✓ 记忆整理完成，当前字数: {current_length}")
+                    success = True
+                    break
+            
+            if success:
                 break
+            
+            self.logger.warning("⚠️ 连续3次记忆整理失败。")
+            print("\n请选择下一步操作：")
+            print("1. 继续尝试整理 (3次)")
+            print("2. 转为选择性丢弃")
+            print("3. 手动编辑 (跳过字数检查)")
+            print("4. 结束程序")
+            
+            choice = input("请输入选项 (1-4): ").strip()
+            
+            if choice == '1':
+                continue
+            elif choice == '2':
+                break
+            elif choice == '3':
+                self._prompt_manual_edit()
+                return
+            elif choice == '4':
+                raise KeyboardInterrupt("用户主动停止")
+            else:
+                print("无效选项，结束程序")
+                raise KeyboardInterrupt("用户主动停止")
         
         # 如果还是太大，尝试精简
         if current_length > 2400:
@@ -253,7 +281,7 @@ class MemoryManager:
         content = self.api_client.send_request(messages, temperature=1.0, max_tokens=Config.API_MAX_TOKENS,
                                                 task_name="记忆精简", json_response=True)
         new_facts = self._parse_memory_response(content)
-        if new_facts and sum(len(f) for f in new_facts) >= 1400:
+        if new_facts and sum(len(f) for f in new_facts) >= 1200:
             self.user_profile.update_facts(new_facts)
             self.logger.info(f"✓ 记忆精简完成，当前字数: {self.user_profile.get_profile_length()}")
     
