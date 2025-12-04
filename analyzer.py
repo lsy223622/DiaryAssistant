@@ -197,7 +197,7 @@ class DeepSeekAnalyzer:
         user_message = f"""当前记忆列表：
 {facts_text}
 
-请整理上述记忆，使总字数尽可能减少，但保留信息量。"""
+请整理上述记忆，使总字数小于 2000 字，尽可能保留信息量。"""
 
         data = {
             "model": self.model_name,
