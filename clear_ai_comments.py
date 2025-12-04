@@ -152,7 +152,3 @@ def clear_ai_comments():
 
 if __name__ == "__main__":
     clear_ai_comments()
-    Logger.log_separator(logger)
-
-if __name__ == "__main__":
-    clear_ai_comments()
