@@ -120,22 +120,29 @@ class DeepSeekAnalyzer:
             self.logger.error(f"备份记忆失败: {e}")
         
         # 1. 尝试压缩整理
-        new_facts = self._compress_memory(self.user_profile.facts)
+        new_facts = None
+        for attempt in range(3):
+            self.logger.info(f"正在进行记忆整理 (尝试 {attempt + 1}/3)...")
+            temp_facts = self._compress_memory(self.user_profile.facts)
+            
+            if temp_facts:
+                temp_length = sum(len(f) for f in temp_facts)
+                if temp_length < 1400:
+                    self.logger.warning(f"压缩后字数过少 ({temp_length} < 1400)，放弃本次修改...")
+                    continue
+                
+                new_facts = temp_facts
+                break
+            else:
+                self.logger.warning("记忆整理返回结果无效或解析失败")
+        
         if new_facts:
             new_length = sum(len(f) for f in new_facts)
-            if new_length < 1400:
-                self.logger.warning(f"压缩后字数过少 ({new_length} < 1400)，放弃本次修改并重试...")
-                # 简单的重试逻辑：再试一次
-                new_facts = self._compress_memory(self.user_profile.facts)
-                if new_facts:
-                    new_length = sum(len(f) for f in new_facts)
-            
-            if new_facts and new_length >= 1400:
-                self.user_profile.update_facts(new_facts)
-                self.logger.info(f"✓ 记忆整理完成，当前字数: {new_length}")
-                current_length = new_length
-            else:
-                self.logger.warning("记忆整理失败或结果不符合要求，保持原样")
+            self.user_profile.update_facts(new_facts)
+            self.logger.info(f"✓ 记忆整理完成，当前字数: {new_length}")
+            current_length = new_length
+        else:
+            self.logger.warning("记忆整理多次失败，保持原样")
 
         # 2. 如果还是太大，尝试选择性丢弃
         if current_length > 2000:
