@@ -173,9 +173,7 @@ class DeepSeekAnalyzer:
         self.logger.info(f"正在生成 {week_info} 的总结...")
         
         # 格式化周日记
-        from weekly_summary import WeeklySummaryManager
-        manager = WeeklySummaryManager(Config.WEEKLY_SUMMARY_DIR)
-        week_content = manager.format_week_diaries_for_ai(week_info)
+        week_content = week_info.format_for_ai()
         
         # 创建系统提示
         system_prompt = """# 角色设定
@@ -244,13 +242,10 @@ class DeepSeekAnalyzer:
         # 格式化本周日记（包括今天）
         current_week_content = ""
         if context_diaries:
-            from diary_reader import DiaryReader
-            diary_reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
-            
             current_week_content = "\n## 📝 本周日记（截至今日）\n\n"
             for diary in context_diaries:
                 # format_diary_for_ai 已经排除了 AI 说 部分
-                diary_content = diary_reader.format_diary_for_ai(diary)
+                diary_content = diary.format_for_ai()
                 current_week_content += diary_content + "\n\n" + "="*50 + "\n\n"
         
         # 创建系统提示
@@ -305,12 +300,9 @@ class DeepSeekAnalyzer:
         # 格式化本周日记
         current_week_content = ""
         if week_diaries:
-            from diary_reader import DiaryReader
-            diary_reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
-            
             current_week_content = "\n## 📝 本周日记\n\n"
             for diary in week_diaries:
-                diary_content = diary_reader.format_diary_for_ai(diary)
+                diary_content = diary.format_for_ai()
                 current_week_content += diary_content + "\n\n" + "="*50 + "\n\n"
         
         # 创建系统提示

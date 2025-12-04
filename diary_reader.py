@@ -27,6 +27,34 @@ class DiaryEntry:
     def __str__(self):
         return f"DiaryEntry({self.date.strftime('%Y-%m-%d')})"
 
+    def format_for_ai(self) -> str:
+        """格式化日记内容，用于发送给AI"""
+        formatted = f"""# {self.date.strftime('%Y年%m月%d日')} {self.title}
+
+## 待办事项
+"""
+        if self.todos:
+            for todo in self.todos:
+                formatted += f"- {todo}\n"
+        else:
+            formatted += "无\n"
+        
+        formatted += "\n## 记录\n"
+        if self.records:
+            for record in self.records:
+                formatted += f"- {record}\n"
+        else:
+            formatted += "无\n"
+        
+        formatted += "\n## 想法\n"
+        if self.thoughts:
+            for thought in self.thoughts:
+                formatted += f"- {thought}\n"
+        else:
+            formatted += "无\n"
+        
+        return formatted
+
 class DiaryReader:
     """读取和解析日记文件"""
     
@@ -258,31 +286,3 @@ class DiaryReader:
                 self.logger.warning(f"有 {failed_count} 篇日记解析失败")
         
         return diaries
-    
-    def format_diary_for_ai(self, diary: DiaryEntry) -> str:
-        """格式化日记内容，用于发送给AI"""
-        formatted = f"""# {diary.date.strftime('%Y年%m月%d日')} {diary.title}
-
-## 待办事项
-"""
-        if diary.todos:
-            for todo in diary.todos:
-                formatted += f"- {todo}\n"
-        else:
-            formatted += "无\n"
-        
-        formatted += "\n## 记录\n"
-        if diary.records:
-            for record in diary.records:
-                formatted += f"- {record}\n"
-        else:
-            formatted += "无\n"
-        
-        formatted += "\n## 想法\n"
-        if diary.thoughts:
-            for thought in diary.thoughts:
-                formatted += f"- {thought}\n"
-        else:
-            formatted += "无\n"
-        
-        return formatted

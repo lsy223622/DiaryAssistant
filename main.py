@@ -96,6 +96,15 @@ class DiaryAssistant:
                 f"{todo_count}个待办 / {record_count}条记录 / {thought_count}条想法"
             )
     
+    def _get_context_diaries(self, current_diary: DiaryEntry) -> List[DiaryEntry]:
+        """获取当前日记所在周的上下文日记（包括当前日记）"""
+        week_info = self.weekly_manager.get_week_info(current_diary.date)
+        context_diaries = []
+        for d in self.diaries:
+            if d.date >= week_info.start_date and d.date <= current_diary.date:
+                context_diaries.append(d)
+        return context_diaries
+
     def process_daily_evaluations(self) -> bool:
         """处理每日评价"""
         Logger.log_separator(self.logger)
@@ -103,34 +112,22 @@ class DiaryAssistant:
         Logger.log_separator(self.logger)
         
         # 确保日记按时间排序
-        sorted_diaries = sorted(self.diaries, key=lambda x: x.date)
+        self.diaries.sort(key=lambda x: x.date)
         
         count = 0
-        for i, diary in enumerate(sorted_diaries):
+        for i, diary in enumerate(self.diaries):
             # 检查是否已有评价
             if diary.ai_comment:
                 continue
             
-            self.logger.info(f"[{i+1}/{len(sorted_diaries)}] 发现未评价日记: {diary.date.strftime('%Y-%m-%d')}")
+            self.logger.info(f"[{i+1}/{len(self.diaries)}] 发现未评价日记: {diary.date.strftime('%Y-%m-%d')}")
             
             # 获取上下文
             # 1. 历史周总结（这天所在周之前的周）
-            # 获取这天所在的周信息
-            current_week_info = self.weekly_manager.get_week_info(diary.date)
-            # 获取所有周总结
-            all_summaries = self.weekly_manager.get_all_summaries()
-            # 筛选出之前的周总结
-            historical_summaries = []
-            for week_info, summary in all_summaries:
-                # 只要周的结束时间早于当前周的开始时间，就算历史
-                if week_info.end_date < current_week_info.start_date:
-                    historical_summaries.append((week_info, summary))
+            historical_summaries = self.weekly_manager.get_historical_summaries(diary.date)
             
             # 2. 本周日记（这天所在周，直到这天）
-            context_diaries = []
-            for d in sorted_diaries:
-                if d.date >= current_week_info.start_date and d.date <= diary.date:
-                    context_diaries.append(d)
+            context_diaries = self._get_context_diaries(diary)
             
             # 生成评价
             evaluation = self.analyzer.generate_daily_evaluation(

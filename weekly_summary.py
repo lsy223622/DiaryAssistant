@@ -28,6 +28,18 @@ class WeekInfo:
         """获取总结文件名"""
         return f"{self.year}_W{self.week:02d}_{self.start_date.strftime('%Y%m%d')}-{self.end_date.strftime('%Y%m%d')}.md"
 
+    def format_for_ai(self) -> str:
+        """格式化周日记内容用于AI生成总结"""
+        formatted = f"""# {self.year}年第{self.week}周日记
+**时间范围**: {self.start_date.strftime('%Y年%m月%d日')} 至 {self.end_date.strftime('%Y年%m月%d日')}
+
+"""
+        for diary in self.diaries:
+            diary_content = diary.format_for_ai()
+            formatted += diary_content + "\n\n" + "="*50 + "\n\n"
+        
+        return formatted
+
 
 class WeeklySummaryManager:
     """每周总结管理器"""
@@ -181,20 +193,15 @@ class WeeklySummaryManager:
             self.logger.info(f"周总结已保存: {filepath}")
         except Exception as e:
             self.logger.error(f"保存周总结失败: {e}")
-    
-    def format_week_diaries_for_ai(self, week_info: WeekInfo) -> str:
-        """格式化周日记内容用于AI生成总结"""
-        from diary_reader import DiaryReader
-        
-        diary_reader = DiaryReader([Config.DIARY_DIR, Config.DIARY_OLD_DIR])
-        
-        formatted = f"""# {week_info.year}年第{week_info.week}周日记
-**时间范围**: {week_info.start_date.strftime('%Y年%m月%d日')} 至 {week_info.end_date.strftime('%Y年%m月%d日')}
 
-"""
+    def get_historical_summaries(self, current_date: datetime) -> List[Tuple[WeekInfo, str]]:
+        """获取指定日期之前的历史周总结"""
+        current_week_info = self.get_week_info(current_date)
+        all_summaries = self.get_all_summaries()
         
-        for diary in week_info.diaries:
-            diary_content = diary_reader.format_diary_for_ai(diary)
-            formatted += diary_content + "\n\n" + "="*50 + "\n\n"
-        
-        return formatted
+        historical_summaries = []
+        for week_info, summary in all_summaries:
+            if week_info.end_date < current_week_info.start_date:
+                historical_summaries.append((week_info, summary))
+        return historical_summaries
+
