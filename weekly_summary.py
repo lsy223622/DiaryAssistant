@@ -84,6 +84,8 @@ class WeeklySummaryManager:
         weeks = sorted(week_dict.values(), key=lambda w: w.start_date)
         
         self.logger.info(f"日记已分组为 {len(weeks)} 周")
+        for w in weeks:
+            self.logger.debug(f"Week {w.year}-W{w.week}: {len(w.diaries)} diaries")
         return weeks
     
     def is_week_complete(self, week_info: WeekInfo) -> bool:
@@ -202,5 +204,7 @@ class WeeklySummaryManager:
         for week_info, summary in all_summaries:
             if week_info.end_date < current_week_info.start_date:
                 historical_summaries.append((week_info, summary))
+        
+        self.logger.debug(f"Found {len(historical_summaries)} historical summaries before {current_week_info.start_date.strftime('%Y-%m-%d')}")
         return historical_summaries
 

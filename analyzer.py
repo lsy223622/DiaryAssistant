@@ -290,6 +290,7 @@ class DeepSeekAnalyzer:
                     prompt_length += len(message['content'])
         
         self.logger.info(f"正在发送{task_name}，提示词长度: {prompt_length} 字符")
+        self.logger.debug(f"Request Params: Model={data.get('model')}, Temp={data.get('temperature')}, MaxTokens={data.get('max_tokens')}")
         
         # 强制开启流式模式，以避免长连接超时和响应截断
         data['stream'] = True
@@ -351,6 +352,7 @@ class DeepSeekAnalyzer:
                     
                 except Exception as e:
                     self.logger.warning(f"{task_name}失败 (尝试 {attempt + 1}/3): {e}")
+                    self.logger.debug(f"Exception details:", exc_info=True)
                     if attempt < 2:
                         time.sleep(2)
             
@@ -472,6 +474,7 @@ class DeepSeekAnalyzer:
     def generate_daily_evaluation(self, current_diary: DiaryEntry, context_diaries: List[DiaryEntry], weekly_summaries: List[tuple]) -> Optional[str]:
         """生成每日评价和建议"""
         self.logger.info(f"正在为 {current_diary.date.strftime('%Y-%m-%d')} 生成评价...")
+        self.logger.debug(f"Context: {len(weekly_summaries)} historical summaries, {len(context_diaries)} context diaries")
         
         # 格式化历史周总结
         historical_context = ""

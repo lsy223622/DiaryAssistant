@@ -11,11 +11,13 @@ class UserProfile:
 
     def _load_profile(self) -> List[str]:
         if not self.profile_path.exists():
+            self.logger.debug("User profile file not found, starting empty.")
             return []
         try:
             with open(self.profile_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 if isinstance(data, list):
+                    self.logger.debug(f"Loaded {len(data)} facts from profile.")
                     return [str(item) for item in data]
                 return []
         except Exception as e:
@@ -44,6 +46,7 @@ class UserProfile:
             "update": [{"old": "old fact", "new": "new fact"}]
         }
         """
+        self.logger.debug(f"Updating profile with operations: {operations}")
         added_count = 0
         removed_count = 0
         updated_count = 0
@@ -53,6 +56,7 @@ class UserProfile:
             if fact not in self.facts:
                 self.facts.append(fact)
                 added_count += 1
+                self.logger.debug(f"Added fact: {fact}")
 
         # Handle Remove
         for fact_to_remove in operations.get("remove", []):
@@ -62,6 +66,7 @@ class UserProfile:
             if fact_to_remove in self.facts:
                 self.facts.remove(fact_to_remove)
                 removed_count += 1
+                self.logger.debug(f"Removed fact: {fact_to_remove}")
             else:
                 # 尝试模糊匹配 (包含关系)
                 candidates = [f for f in self.facts if fact_to_remove in f]
@@ -69,7 +74,7 @@ class UserProfile:
                     target = candidates[0]
                     self.facts.remove(target)
                     removed_count += 1
-                    self.logger.info(f"Fuzzy removed: '{target}' (matched '{fact_to_remove}')")
+                    self.logger.debug(f"Removed fact (fuzzy match): {target}")
                 else:
                     self.logger.warning(f"Could not find fact to remove: {fact_to_remove}")
 
@@ -85,6 +90,7 @@ class UserProfile:
                 index = self.facts.index(old_fact)
                 self.facts[index] = new_fact
                 updated_count += 1
+                self.logger.debug(f"Updated fact: '{old_fact}' -> '{new_fact}'")
             else:
                 # 尝试模糊匹配 (包含关系)
                 candidates = [i for i, f in enumerate(self.facts) if old_fact in f]
@@ -94,11 +100,12 @@ class UserProfile:
                     # 替换匹配到的部分
                     self.facts[index] = original_fact.replace(old_fact, new_fact)
                     updated_count += 1
-                    self.logger.info(f"Fuzzy updated: '{original_fact}' -> '{self.facts[index]}'")
+                    self.logger.debug(f"Updated fact (fuzzy match): '{original_fact}' -> '{self.facts[index]}'")
                 else:
                     self.logger.warning(f"Could not find fact to update: {old_fact}")
 
         if added_count or removed_count or updated_count:
+            self.logger.info(f"Profile updated: +{added_count}, -{removed_count}, ~{updated_count}")
             self.save_profile()
             self.logger.info(f"Profile updated: +{added_count}, -{removed_count}, ~{updated_count}")
 

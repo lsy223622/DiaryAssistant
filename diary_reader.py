@@ -114,6 +114,8 @@ class DiaryReader:
         else:
             entry.title = f"日记 {entry.date.strftime('%Y-%m-%d')}"
         
+        self.logger.debug(f"解析日记: {entry.date}, 标题: {entry.title}")
+        
         # 找到附件分割点（忽略附件及之后的内容）
         cut_index = len(content)
         for marker in self.attachment_variants:
@@ -124,6 +126,7 @@ class DiaryReader:
                 idx = match.start()
                 if idx < cut_index:
                     cut_index = idx
+                    self.logger.debug(f"找到附件标记 '{marker}' at index {idx}")
         
         # 提取附件前的内容
         main_content = content[:cut_index].strip()
@@ -134,8 +137,12 @@ class DiaryReader:
         entry.records = self._extract_section(main_content, self.record_variants)
         entry.thoughts = self._extract_section(main_content, self.thought_variants)
         
+        self.logger.debug(f"解析结果: {len(entry.todos)} todos, {len(entry.records)} records, {len(entry.thoughts)} thoughts")
+        
         # 提取AI评论（从原始内容中提取，因为它可能在附件之后）
         entry.ai_comment = self._extract_section_text(content, self.ai_comment_variants)
+        if entry.ai_comment:
+            self.logger.debug("发现已有 AI 评论")
 
     def _extract_section_text(self, content: str, section_names: List[str]) -> str:
         """提取特定部分的纯文本内容"""
