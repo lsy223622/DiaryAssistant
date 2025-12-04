@@ -3,9 +3,10 @@
 每周总结管理模块
 """
 
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from diary_reader import DiaryEntry
 from logger import Logger
@@ -13,14 +14,15 @@ from logger import Logger
 
 class WeekInfo:
     """周信息类"""
+    
     def __init__(self, year: int, week: int, start_date: datetime, end_date: datetime):
         self.year = year
-        self.week = week  # ISO周数
-        self.start_date = start_date  # 周一
-        self.end_date = end_date  # 周日
+        self.week = week
+        self.start_date = start_date
+        self.end_date = end_date
         self.diaries: List[DiaryEntry] = []
     
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.year}年第{self.week}周 ({self.start_date.strftime('%Y-%m-%d')} 至 {self.end_date.strftime('%Y-%m-%d')})"
     
     def get_filename(self) -> str:
@@ -28,39 +30,34 @@ class WeekInfo:
         return f"{self.year}_W{self.week:02d}_{self.start_date.strftime('%Y%m%d')}-{self.end_date.strftime('%Y%m%d')}.md"
 
     def format_for_ai(self) -> str:
-        """格式化周日记内容用于AI生成总结"""
-        formatted = f"""# {self.year}年第{self.week}周日记
+        """格式化周日记内容用于 AI 生成总结"""
+        header = f"""# {self.year}年第{self.week}周日记
 **时间范围**: {self.start_date.strftime('%Y年%m月%d日')} 至 {self.end_date.strftime('%Y年%m月%d日')}
 
 """
+        parts = [header]
         for diary in self.diaries:
-            diary_content = diary.format_for_ai()
-            formatted += diary_content + "\n\n" + "="*50 + "\n\n"
-        
-        return formatted
+            parts.extend([diary.format_for_ai(), "", "="*50, ""])
+        return "\n".join(parts)
 
 
 class WeeklySummaryManager:
     """每周总结管理器"""
+    
+    # 文件名解析正则
+    FILENAME_PATTERN = re.compile(r'(\d{4})_W(\d{2})_(\d{8})-(\d{8})\.md')
     
     def __init__(self, weekly_summary_dir: Path):
         self.weekly_summary_dir = weekly_summary_dir
         self.logger = Logger.get_logger("WeeklySummary")
         self.weekly_summary_dir.mkdir(exist_ok=True)
     
-    def get_week_info(self, date: datetime) -> WeekInfo:
+    @staticmethod
+    def get_week_info(date: datetime) -> WeekInfo:
         """获取指定日期所在周的信息（周一到周日）"""
-        # ISO周从周一开始，weekday()返回0-6，0是周一
-        weekday = date.weekday()
-        
-        # 计算周一的日期
-        monday = date - timedelta(days=weekday)
-        # 计算周日的日期
+        monday = date - timedelta(days=date.weekday())
         sunday = monday + timedelta(days=6)
-        
-        # 获取ISO周数
         iso_year, iso_week, _ = monday.isocalendar()
-        
         return WeekInfo(iso_year, iso_week, monday, sunday)
     
     def group_diaries_by_week(self, diaries: List[DiaryEntry]) -> List[WeekInfo]:
@@ -68,107 +65,58 @@ class WeeklySummaryManager:
         if not diaries:
             return []
         
-        # 按周分组
         week_dict: Dict[Tuple[int, int], WeekInfo] = {}
-        
         for diary in diaries:
             week_info = self.get_week_info(diary.date)
             key = (week_info.year, week_info.week)
-            
             if key not in week_dict:
                 week_dict[key] = week_info
-            
             week_dict[key].diaries.append(diary)
         
-        # 按日期排序
         weeks = sorted(week_dict.values(), key=lambda w: w.start_date)
-        
         self.logger.info(f"日记已分组为 {len(weeks)} 周")
-        for w in weeks:
-            self.logger.debug(f"Week {w.year}-W{w.week}: {len(w.diaries)} diaries")
         return weeks
     
     def is_week_complete(self, week_info: WeekInfo) -> bool:
-        """检查一周是否已完整经过（即周日已经过去）"""
-        today = datetime.now().date()
-        return week_info.end_date.date() < today
+        """检查一周是否已完整经过"""
+        return week_info.end_date.date() < datetime.now().date()
     
     def has_summary(self, week_info: WeekInfo) -> bool:
         """检查某周是否已有总结"""
-        filename = week_info.get_filename()
-        filepath = self.weekly_summary_dir / filename
-        return filepath.exists()
+        return self.get_summary_path(week_info).exists()
     
     def get_summary_path(self, week_info: WeekInfo) -> Path:
         """获取总结文件路径"""
-        filename = week_info.get_filename()
-        return self.weekly_summary_dir / filename
+        return self.weekly_summary_dir / week_info.get_filename()
     
     def get_weeks_need_summary(self, weeks: List[WeekInfo]) -> List[WeekInfo]:
-        """获取需要生成总结的周（已完整经过且有日记但无总结）"""
-        need_summary = []
-        
-        for week in weeks:
-            # 必须是已完整经过的周
-            if not self.is_week_complete(week):
-                continue
-            
-            # 必须有日记
-            if not week.diaries:
-                continue
-            
-            # 必须没有总结
-            if not self.has_summary(week):
-                need_summary.append(week)
-        
-        return need_summary
+        """获取需要生成总结的周"""
+        return [w for w in weeks 
+                if self.is_week_complete(w) and w.diaries and not self.has_summary(w)]
     
     def get_all_summaries(self) -> List[Tuple[WeekInfo, str]]:
         """获取所有已有的周总结内容"""
         summaries = []
-        
-        # 读取所有总结文件
         try:
-            summary_files = sorted(self.weekly_summary_dir.glob("*.md"))
+            for filepath in sorted(self.weekly_summary_dir.glob("*.md")):
+                week_info = self._parse_filename(filepath)
+                if week_info:
+                    content = filepath.read_text(encoding='utf-8')
+                    summaries.append((week_info, content))
         except Exception as e:
             self.logger.error(f"读取总结目录失败: {e}")
-            return summaries
-        
-        for filepath in summary_files:
-            try:
-                # 从文件名解析周信息
-                week_info = self._parse_filename(filepath)
-                if not week_info:
-                    continue
-                
-                # 读取内容
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                
-                summaries.append((week_info, content))
-            except Exception as e:
-                self.logger.error(f"读取总结文件失败 {filepath}: {e}")
-        
         return summaries
     
     def _parse_filename(self, filepath: Path) -> Optional[WeekInfo]:
         """从文件名解析周信息"""
-        # 文件名格式: 2025_W01_20241230-20250105.md
-        import re
-        pattern = r'(\d{4})_W(\d{2})_(\d{8})-(\d{8})\.md'
-        match = re.match(pattern, filepath.name)
-        
+        match = self.FILENAME_PATTERN.match(filepath.name)
         if not match:
             return None
         
-        year = int(match.group(1))
-        week = int(match.group(2))
-        start_str = match.group(3)
-        end_str = match.group(4)
-        
         try:
-            start_date = datetime.strptime(start_str, '%Y%m%d')
-            end_date = datetime.strptime(end_str, '%Y%m%d')
+            year, week = int(match.group(1)), int(match.group(2))
+            start_date = datetime.strptime(match.group(3), '%Y%m%d')
+            end_date = datetime.strptime(match.group(4), '%Y%m%d')
             return WeekInfo(year, week, start_date, end_date)
         except ValueError:
             return None
@@ -177,9 +125,7 @@ class WeeklySummaryManager:
         """保存周总结"""
         filepath = self.get_summary_path(week_info)
         
-        try:
-            # 添加元信息
-            meta_info = f"""# {week_info.year}年第{week_info.week}周总结
+        meta = f"""# {week_info.year}年第{week_info.week}周总结
 **时间范围**: {week_info.start_date.strftime('%Y年%m月%d日')} 至 {week_info.end_date.strftime('%Y年%m月%d日')}
 **生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 **日记数量**: {len(week_info.diaries)} 篇
@@ -187,24 +133,15 @@ class WeeklySummaryManager:
 ---
 
 """
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(meta_info)
-                f.write(summary)
-            
+        try:
+            filepath.write_text(meta + summary, encoding='utf-8')
             self.logger.info(f"周总结已保存: {filepath}")
         except Exception as e:
             self.logger.error(f"保存周总结失败: {e}")
 
     def get_historical_summaries(self, current_date: datetime) -> List[Tuple[WeekInfo, str]]:
         """获取指定日期之前的历史周总结"""
-        current_week_info = self.get_week_info(current_date)
-        all_summaries = self.get_all_summaries()
-        
-        historical_summaries = []
-        for week_info, summary in all_summaries:
-            if week_info.end_date < current_week_info.start_date:
-                historical_summaries.append((week_info, summary))
-        
-        self.logger.debug(f"Found {len(historical_summaries)} historical summaries before {current_week_info.start_date.strftime('%Y-%m-%d')}")
-        return historical_summaries
+        current_week = self.get_week_info(current_date)
+        return [(w, s) for w, s in self.get_all_summaries() 
+                if w.end_date < current_week.start_date]
 

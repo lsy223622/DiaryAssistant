@@ -1,120 +1,130 @@
+#!/usr/bin/env python3
+"""
+用户画像管理模块
+"""
+
 import json
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from logger import Logger
 
+
 class UserProfile:
+    """用户画像（长期记忆）管理"""
+    
     def __init__(self, profile_path: Path):
         self.profile_path = profile_path
         self.logger = Logger.get_logger("UserProfile")
         self.facts: List[str] = self._load_profile()
 
     def _load_profile(self) -> List[str]:
+        """加载用户画像"""
         if not self.profile_path.exists():
-            self.logger.debug("User profile file not found, starting empty.")
+            self.logger.debug("用户画像文件不存在，初始化为空")
             return []
         try:
-            with open(self.profile_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    self.logger.debug(f"Loaded {len(data)} facts from profile.")
-                    return [str(item) for item in data]
-                return []
+            data = json.loads(self.profile_path.read_text(encoding='utf-8'))
+            if isinstance(data, list):
+                self.logger.debug(f"已加载 {len(data)} 条记忆")
+                return [str(item) for item in data]
+            return []
         except Exception as e:
-            self.logger.error(f"Failed to load user profile: {e}")
+            self.logger.error(f"加载用户画像失败: {e}")
             return []
 
     def save_profile(self):
+        """保存用户画像"""
         try:
-            with open(self.profile_path, 'w', encoding='utf-8') as f:
-                json.dump(self.facts, f, ensure_ascii=False, indent=2)
-            self.logger.info("User profile saved.")
+            self.profile_path.write_text(
+                json.dumps(self.facts, ensure_ascii=False, indent=2),
+                encoding='utf-8'
+            )
+            self.logger.info("用户画像已保存")
         except Exception as e:
-            self.logger.error(f"Failed to save user profile: {e}")
+            self.logger.error(f"保存用户画像失败: {e}")
 
     def get_profile_text(self) -> str:
+        """获取格式化的画像文本"""
         if not self.facts:
             return "暂无个人信息记录。"
-        return "\n".join([f"- {fact}" for fact in self.facts])
+        return "\n".join(f"- {fact}" for fact in self.facts)
+
+    def get_profile_length(self) -> int:
+        """获取画像总字数"""
+        return sum(len(fact) for fact in self.facts)
+
+    def update_facts(self, new_facts: List[str]):
+        """替换所有记忆"""
+        self.facts = new_facts
+        self.save_profile()
+        self.logger.info(f"画像已更新，共 {len(self.facts)} 条")
 
     def update(self, operations: Dict[str, Any]):
         """
-        operations structure:
-        {
+        更新画像
+        operations: {
             "add": ["fact1", "fact2"],
             "remove": ["fact to remove"],
             "update": [{"old": "old fact", "new": "new fact"}]
         }
         """
-        self.logger.debug(f"Updating profile with operations: {operations}")
-        added_count = 0
-        removed_count = 0
-        updated_count = 0
+        added = self._handle_add(operations.get("add", []))
+        removed = self._handle_remove(operations.get("remove", []))
+        updated = self._handle_update(operations.get("update", []))
 
-        # Handle Add
-        for fact in operations.get("add", []):
-            if fact not in self.facts:
+        if added or removed or updated:
+            self.logger.info(f"画像更新: +{added}, -{removed}, ~{updated}")
+            self.save_profile()
+
+    def _handle_add(self, facts_to_add: List[str]) -> int:
+        """处理添加操作"""
+        count = 0
+        for fact in facts_to_add:
+            if fact and fact not in self.facts:
                 self.facts.append(fact)
-                added_count += 1
-                self.logger.debug(f"Added fact: {fact}")
+                count += 1
+        return count
 
-        # Handle Remove
-        for fact_to_remove in operations.get("remove", []):
-            if not fact_to_remove:
+    def _handle_remove(self, facts_to_remove: List[str]) -> int:
+        """处理删除操作"""
+        count = 0
+        for fact in facts_to_remove:
+            if not fact:
                 continue
-                
-            if fact_to_remove in self.facts:
-                self.facts.remove(fact_to_remove)
-                removed_count += 1
-                self.logger.debug(f"Removed fact: {fact_to_remove}")
+            if fact in self.facts:
+                self.facts.remove(fact)
+                count += 1
             else:
-                # 尝试模糊匹配 (包含关系)
-                candidates = [f for f in self.facts if fact_to_remove in f]
+                # 模糊匹配
+                candidates = [f for f in self.facts if fact in f]
                 if len(candidates) == 1:
-                    target = candidates[0]
-                    self.facts.remove(target)
-                    removed_count += 1
-                    self.logger.debug(f"Removed fact (fuzzy match): {target}")
+                    self.facts.remove(candidates[0])
+                    count += 1
                 else:
-                    self.logger.warning(f"Could not find fact to remove: {fact_to_remove}")
+                    self.logger.warning(f"无法找到要删除的记忆: {fact}")
+        return count
 
-        # Handle Update
-        for update_item in operations.get("update", []):
-            old_fact = update_item.get("old")
-            new_fact = update_item.get("new")
-            
+    def _handle_update(self, updates: List[Dict]) -> int:
+        """处理更新操作"""
+        count = 0
+        for item in updates:
+            old_fact = item.get("old")
+            new_fact = item.get("new")
             if not old_fact or new_fact is None:
                 continue
-
+            
             if old_fact in self.facts:
-                index = self.facts.index(old_fact)
-                self.facts[index] = new_fact
-                updated_count += 1
-                self.logger.debug(f"Updated fact: '{old_fact}' -> '{new_fact}'")
+                idx = self.facts.index(old_fact)
+                self.facts[idx] = new_fact
+                count += 1
             else:
-                # 尝试模糊匹配 (包含关系)
-                candidates = [i for i, f in enumerate(self.facts) if old_fact in f]
+                # 模糊匹配
+                candidates = [(i, f) for i, f in enumerate(self.facts) if old_fact in f]
                 if len(candidates) == 1:
-                    index = candidates[0]
-                    original_fact = self.facts[index]
-                    # 替换匹配到的部分
-                    self.facts[index] = original_fact.replace(old_fact, new_fact)
-                    updated_count += 1
-                    self.logger.debug(f"Updated fact (fuzzy match): '{original_fact}' -> '{self.facts[index]}'")
+                    idx, original = candidates[0]
+                    self.facts[idx] = original.replace(old_fact, new_fact)
+                    count += 1
                 else:
-                    self.logger.warning(f"Could not find fact to update: {old_fact}")
-
-        if added_count or removed_count or updated_count:
-            self.logger.info(f"Profile updated: +{added_count}, -{removed_count}, ~{updated_count}")
-            self.save_profile()
-            self.logger.info(f"Profile updated: +{added_count}, -{removed_count}, ~{updated_count}")
-
-    def get_profile_length(self) -> int:
-        """Get total character count of all facts."""
-        return sum(len(fact) for fact in self.facts)
-
-    def update_facts(self, new_facts: List[str]):
-        """Replace all facts with a new list."""
-        self.facts = new_facts
-        self.save_profile()
-        self.logger.info(f"Profile facts replaced. New count: {len(self.facts)}")
+                    self.logger.warning(f"无法找到要更新的记忆: {old_fact}")
+        return count
