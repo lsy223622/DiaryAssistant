@@ -319,7 +319,7 @@ class PromptTemplates:
     
     MEMORY_UPDATE_INSTRUCTION = '''
 ## 记忆更新功能
-如果你从日记中发现了关于用户的新事实（如新的长期目标、重要关系、健康状况、喜好厌恶等），或者发现旧的记忆已过时，请在回复的**最后**，使用 JSON 格式输出记忆更新指令：
+如果你从日记中发现了关于用户的新事实（如新的长期目标、重要关系、健康状况、喜好厌恶等），或者发现旧的记忆已过时，请在回复的**最后**，使用 JSON 格式输出记忆更新指令，记得使用代码块包裹：
 ```json
 {
     "memory_updates": {
@@ -330,7 +330,7 @@ class PromptTemplates:
 }
 ```
 如果没有更新，则不需要输出此 JSON 块。
-注意：只记录长期有价值的信息，"remove" 和 "update" 中的 "old" 必须与"用户画像"中的文本完全一致。'''
+注意：只记录长期有价值的信息，"remove" 和 "update" 中的 "old" 必须与"用户画像"中的文本完全一致！！'''
 
     @staticmethod
     def weekly_summary_system() -> str:
