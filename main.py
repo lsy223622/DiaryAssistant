@@ -109,7 +109,7 @@ class DiaryAssistant:
     def _get_context_diaries(self, current_diary: DiaryEntry) -> List[DiaryEntry]:
         """获取当前日记所在周的上下文日记（包括当前日记）"""
         week_info = self.weekly_manager.get_week_info(current_diary.date)
-        self.logger.debug(f"获取上下文日记: {current_diary.date} (Week: {week_info.week_str})")
+        self.logger.debug(f"获取上下文日记: {current_diary.date} (Week: {week_info.year}-W{week_info.week})")
         context_diaries = []
         for d in self.diaries:
             if d.date >= week_info.start_date and d.date <= current_diary.date:
