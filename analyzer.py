@@ -197,7 +197,7 @@ class DeepSeekAnalyzer:
         user_message = f"""当前记忆列表：
 {facts_text}
 
-请整理上述记忆，使总字数小于 2000 字，尽可能保留信息量。"""
+请整理上述记忆，使总字数小于 2000 字，尽可能保留完整信息。"""
 
         data = {
             "model": self.model_name,
@@ -205,7 +205,7 @@ class DeepSeekAnalyzer:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
-            "temperature": 0.5, # 使用较低温度以保证准确性
+            "temperature": 0.6,
             "max_tokens": 4000,
             "response_format": {"type": "json_object"}
         }
@@ -525,7 +525,8 @@ class DeepSeekAnalyzer:
 如果没有更新，则不需要输出此 JSON 块。
 注意：
 1. 只记录长期有价值的信息，不要记录琐碎日常。
-2. "remove" 和 "update" 中的 "old" 必须与"用户画像"中列出的文本完全一致。
+2. 长期经历性的变化（如健康状况、重要关系等）应优先记录，并且尽量保留全过程记录。
+3. "remove" 和 "update" 中的 "old" 必须与"用户画像"中列出的文本完全一致。
 """
         
         # 创建用户消息
@@ -544,7 +545,7 @@ class DeepSeekAnalyzer:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
-            "temperature": 0.8,
+            "temperature": 1.0,
             "max_tokens": 2000
         }
         

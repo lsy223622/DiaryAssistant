@@ -56,22 +56,47 @@ class UserProfile:
 
         # Handle Remove
         for fact_to_remove in operations.get("remove", []):
+            if not fact_to_remove:
+                continue
+                
             if fact_to_remove in self.facts:
                 self.facts.remove(fact_to_remove)
                 removed_count += 1
             else:
-                self.logger.warning(f"Could not find fact to remove: {fact_to_remove}")
+                # 尝试模糊匹配 (包含关系)
+                candidates = [f for f in self.facts if fact_to_remove in f]
+                if len(candidates) == 1:
+                    target = candidates[0]
+                    self.facts.remove(target)
+                    removed_count += 1
+                    self.logger.info(f"Fuzzy removed: '{target}' (matched '{fact_to_remove}')")
+                else:
+                    self.logger.warning(f"Could not find fact to remove: {fact_to_remove}")
 
         # Handle Update
         for update_item in operations.get("update", []):
             old_fact = update_item.get("old")
             new_fact = update_item.get("new")
+            
+            if not old_fact or new_fact is None:
+                continue
+
             if old_fact in self.facts:
                 index = self.facts.index(old_fact)
                 self.facts[index] = new_fact
                 updated_count += 1
             else:
-                self.logger.warning(f"Could not find fact to update: {old_fact}")
+                # 尝试模糊匹配 (包含关系)
+                candidates = [i for i, f in enumerate(self.facts) if old_fact in f]
+                if len(candidates) == 1:
+                    index = candidates[0]
+                    original_fact = self.facts[index]
+                    # 替换匹配到的部分
+                    self.facts[index] = original_fact.replace(old_fact, new_fact)
+                    updated_count += 1
+                    self.logger.info(f"Fuzzy updated: '{original_fact}' -> '{self.facts[index]}'")
+                else:
+                    self.logger.warning(f"Could not find fact to update: {old_fact}")
 
         if added_count or removed_count or updated_count:
             self.save_profile()
