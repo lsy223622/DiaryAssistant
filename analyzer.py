@@ -98,6 +98,162 @@ class DeepSeekAnalyzer:
         except Exception as e:
             self.logger.error(f"保存分析结果时发生未知错误: {e}")
     
+    def _check_and_optimize_memory(self):
+        """检查并优化记忆库大小"""
+        if not self.user_profile:
+            return
+
+        current_length = self.user_profile.get_profile_length()
+        if current_length <= 4000:
+            return
+
+        self.logger.info(f"⚠️ 记忆库过大 ({current_length} 字 > 4000 字)，开始自动整理...")
+        
+        # 1. 尝试压缩整理
+        new_facts = self._compress_memory(self.user_profile.facts)
+        if new_facts:
+            new_length = sum(len(f) for f in new_facts)
+            if new_length < 1400:
+                self.logger.warning(f"压缩后字数过少 ({new_length} < 1400)，放弃本次修改并重试...")
+                # 简单的重试逻辑：再试一次
+                new_facts = self._compress_memory(self.user_profile.facts)
+                if new_facts:
+                    new_length = sum(len(f) for f in new_facts)
+            
+            if new_facts and new_length >= 1400:
+                self.user_profile.update_facts(new_facts)
+                self.logger.info(f"✓ 记忆整理完成，当前字数: {new_length}")
+                current_length = new_length
+            else:
+                self.logger.warning("记忆整理失败或结果不符合要求，保持原样")
+
+        # 2. 如果还是太大，尝试选择性丢弃
+        if current_length > 2000:
+            # 估算需要丢弃的数量 (假设平均每条记忆30字)
+            avg_len = current_length / len(self.user_profile.facts) if self.user_profile.facts else 30
+            drop_chars = current_length - 2000
+            drop_count = int(drop_chars / avg_len) + 1
+            
+            self.logger.info(f"⚠️ 记忆库仍然过大 ({current_length} 字)，尝试丢弃约 {drop_count} 条次要记忆...")
+            
+            new_facts = self._prune_memory(self.user_profile.facts, drop_count)
+            if new_facts:
+                new_length = sum(len(f) for f in new_facts)
+                if new_length < 1400:
+                     self.logger.warning(f"丢弃后字数过少 ({new_length} < 1400)，放弃本次修改...")
+                else:
+                    self.user_profile.update_facts(new_facts)
+                    self.logger.info(f"✓ 记忆精简完成，当前字数: {new_length}")
+                    current_length = new_length
+
+        # 3. 如果还是太大，暂停程序
+        if current_length > 2000:
+            self.logger.warning(f"⚠️ 记忆库仍然过大 ({current_length} 字)，自动处理无法满足要求。")
+            print("\n🛑 记忆库过大，请手动编辑 user_profile.json 文件。")
+            print(f"当前文件路径: {self.user_profile.profile_path}")
+            input("编辑完成后，请按回车键继续...")
+            # 重新加载
+            self.user_profile.facts = self.user_profile._load_profile()
+            self.logger.info(f"已重新加载记忆库，当前字数: {self.user_profile.get_profile_length()}")
+
+    def _compress_memory(self, facts: List[str]) -> Optional[List[str]]:
+        """使用AI整理压缩记忆"""
+        facts_text = json.dumps(facts, ensure_ascii=False, indent=2)
+        
+        system_prompt = """你是一位专业的记忆整理专家。
+用户的长期记忆库过大，需要你进行整理和压缩。
+
+任务：
+1. 清理重复内容。
+2. 合并同一主题的内容（例如将多条关于"跑步"的记录合并）。
+3. 清理不是很有意义的主观评价。
+4. **核心要求**：不要减少记忆的信息量，保留所有事实细节。
+
+请直接返回整理后的记忆列表，格式为 JSON 字符串：
+["记忆1", "记忆2", ...]
+"""
+        
+        user_message = f"""当前记忆列表：
+{facts_text}
+
+请整理上述记忆，使总字数尽可能减少，但保留信息量。"""
+
+        data = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 0.5, # 使用较低温度以保证准确性
+            "max_tokens": 4000,
+            "response_format": {"type": "json_object"}
+        }
+
+        content = self._send_request_with_retry(data, "记忆整理")
+        return self._parse_memory_response(content)
+
+    def _prune_memory(self, facts: List[str], drop_count: int) -> Optional[List[str]]:
+        """使用AI选择性丢弃记忆"""
+        facts_text = json.dumps(facts, ensure_ascii=False, indent=2)
+        
+        system_prompt = f"""你是一位专业的记忆整理专家。
+用户的长期记忆库严重超标，需要你进行选择性丢弃。
+
+任务：
+1. 识别并丢弃相对不重要的记忆。
+2. **保留**：关于长期目标、重要人际关系、健康状况、核心喜好厌恶等关键信息。
+3. **丢弃**：过时的短期计划、琐碎的日常记录、不再相关的信息。
+4. 大约需要丢弃 {drop_count} 条记录。
+
+请直接返回筛选后的记忆列表，格式为 JSON 字符串：
+["记忆1", "记忆2", ...]
+"""
+        
+        user_message = f"""当前记忆列表：
+{facts_text}
+
+请筛选上述记忆，丢弃次要信息。"""
+
+        data = {
+            "model": self.model_name,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            "temperature": 0.5,
+            "max_tokens": 4000,
+            "response_format": {"type": "json_object"}
+        }
+
+        content = self._send_request_with_retry(data, "记忆精简")
+        return self._parse_memory_response(content)
+
+    def _parse_memory_response(self, content: Optional[str]) -> Optional[List[str]]:
+        """解析AI返回的记忆列表"""
+        if not content:
+            return None
+        
+        try:
+            # 尝试直接解析 JSON
+            data = json.loads(content)
+            if isinstance(data, list):
+                return [str(i) for i in data]
+            if isinstance(data, dict):
+                # 应对可能返回 {"memories": [...]} 的情况
+                for key in data:
+                    if isinstance(data[key], list):
+                        return [str(i) for i in data[key]]
+            
+            # 如果直接解析失败，尝试从代码块提取
+            json_match = re.search(r'```json\s*(\[.*?\])\s*```', content, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(1))
+            
+            return None
+        except Exception as e:
+            self.logger.error(f"解析记忆响应失败: {e}")
+            return None
+
     def _send_request_with_retry(self, data: Dict[str, Any], task_name: str = "请求") -> Optional[str]:
         """发送API请求，带有重试逻辑"""
         headers = {
@@ -321,6 +477,8 @@ class DeepSeekAnalyzer:
                     updates = json.loads(json_str)
                     if "memory_updates" in updates:
                         self.user_profile.update(updates["memory_updates"])
+                        # 检查并优化记忆库
+                        self._check_and_optimize_memory()
                     # 从内容中移除 JSON 块
                     content = content.replace(json_match.group(0), "").strip()
                 except Exception as e:
@@ -455,6 +613,8 @@ class DeepSeekAnalyzer:
                     updates = json.loads(json_str)
                     if "memory_updates" in updates:
                         self.user_profile.update(updates["memory_updates"])
+                        # 检查并优化记忆库
+                        self._check_and_optimize_memory()
                     # 从内容中移除 JSON 块
                     analysis_result = analysis_result.replace(json_match.group(0), "").strip()
                 except Exception as e:

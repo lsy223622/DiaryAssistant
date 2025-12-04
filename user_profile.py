@@ -76,3 +76,13 @@ class UserProfile:
         if added_count or removed_count or updated_count:
             self.save_profile()
             self.logger.info(f"Profile updated: +{added_count}, -{removed_count}, ~{updated_count}")
+
+    def get_profile_length(self) -> int:
+        """Get total character count of all facts."""
+        return sum(len(fact) for fact in self.facts)
+
+    def update_facts(self, new_facts: List[str]):
+        """Replace all facts with a new list."""
+        self.facts = new_facts
+        self.save_profile()
+        self.logger.info(f"Profile facts replaced. New count: {len(self.facts)}")
