@@ -110,17 +110,39 @@ class DeepSeekAnalyzer:
         
         self.logger.info(f"正在发送{task_name}，提示词长度: {prompt_length} 字符")
         
+        # 强制开启流式模式，以避免长连接超时和响应截断
+        data['stream'] = True
+        
         while True:
             for attempt in range(3):
                 try:
                     start_time = time.time()
-                    response = requests.post(self.api_url, headers=headers, json=data, timeout=Config.API_TIMEOUT)
-                    elapsed_time = time.time() - start_time
+                    # 开启 stream=True
+                    response = requests.post(self.api_url, headers=headers, json=data, timeout=Config.API_TIMEOUT, stream=True)
                     
                     response.raise_for_status()
-                    result = response.json()
                     
-                    content = result['choices'][0]['message']['content']
+                    content = ""
+                    import json
+                    
+                    # 处理流式响应
+                    for line in response.iter_lines():
+                        if line:
+                            decoded_line = line.decode('utf-8')
+                            if decoded_line.startswith('data: '):
+                                json_str = decoded_line[6:]
+                                if json_str == '[DONE]':
+                                    break
+                                try:
+                                    chunk = json.loads(json_str)
+                                    if 'choices' in chunk and len(chunk['choices']) > 0:
+                                        delta = chunk['choices'][0].get('delta', {})
+                                        if 'content' in delta and delta['content']:
+                                            content += delta['content']
+                                except json.JSONDecodeError:
+                                    continue
+                    
+                    elapsed_time = time.time() - start_time
                     response_length = len(content)
                     self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复长度: {response_length} 字符")
                     return content
