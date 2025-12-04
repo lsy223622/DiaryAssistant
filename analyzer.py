@@ -28,7 +28,7 @@ class ApiClient:
     
     def __init__(self, log_dir: Path):
         self.logger = Logger.get_logger("ApiClient")
-        self.api_key = Config.get_api_key()
+        self.api_key = Config.DEEPSEEK_API_KEY
         self.api_url = Config.DEEPSEEK_API_URL
         self.model_name = Config.DEEPSEEK_MODEL
         
