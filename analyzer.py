@@ -149,7 +149,7 @@ class DeepSeekAnalyzer:
             self.logger.warning("记忆整理多次失败，保持原样")
 
         # 2. 如果还是太大，尝试选择性丢弃
-        if current_length > 2000:
+        if current_length > 2400:
             # 估算需要丢弃的数量 (假设平均每条记忆30字)
             avg_len = current_length / len(self.user_profile.facts) if self.user_profile.facts else 30
             drop_chars = current_length - 2000
@@ -168,7 +168,7 @@ class DeepSeekAnalyzer:
                     current_length = new_length
 
         # 3. 如果还是太大，暂停程序
-        if current_length > 2000:
+        if current_length > 2400:
             self.logger.warning(f"⚠️ 记忆库仍然过大 ({current_length} 字)，自动处理无法满足要求。")
             print("\n🛑 记忆库过大，请手动编辑 user_profile.json 文件。")
             print(f"当前文件路径: {self.user_profile.profile_path}")
