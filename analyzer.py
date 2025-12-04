@@ -304,6 +304,8 @@ class DeepSeekAnalyzer:
                     response.raise_for_status()
                     
                     content = ""
+                    reasoning_content = ""
+                    usage_info = None
                     import json
                     
                     # 处理流式响应
@@ -316,19 +318,34 @@ class DeepSeekAnalyzer:
                                     break
                                 try:
                                     chunk = json.loads(json_str)
+                                    
+                                    # 处理 usage
+                                    if 'usage' in chunk:
+                                        usage_info = chunk['usage']
+
                                     if 'choices' in chunk and len(chunk['choices']) > 0:
                                         delta = chunk['choices'][0].get('delta', {})
                                         if 'content' in delta and delta['content']:
                                             content += delta['content']
+                                        if 'reasoning_content' in delta and delta['reasoning_content']:
+                                            reasoning_content += delta['reasoning_content']
                                 except json.JSONDecodeError:
                                     continue
                     
                     elapsed_time = time.time() - start_time
                     response_length = len(content)
-                    self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复长度: {response_length} 字符")
+                    
+                    if usage_info:
+                        prompt_tokens = usage_info.get('prompt_tokens', 0)
+                        completion_tokens = usage_info.get('completion_tokens', 0)
+                        total_tokens = usage_info.get('total_tokens', 0)
+                        self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复: {response_length}字，Token: {prompt_tokens}+{completion_tokens}={total_tokens}")
+                        print(f"📊 Token使用: 提问 {prompt_tokens} + 回答 {completion_tokens} = 总计 {total_tokens}")
+                    else:
+                        self.logger.info(f"{task_name}完成，耗时: {elapsed_time:.2f}秒，回复长度: {response_length} 字符")
                     
                     # 保存交互日志
-                    self._save_interaction_log(data, content, task_name)
+                    self._save_interaction_log(data, content, task_name, reasoning_content, usage_info)
                     
                     return content
                     
@@ -349,7 +366,7 @@ class DeepSeekAnalyzer:
             
             self.logger.info("正在重试...")
 
-    def _save_interaction_log(self, data: Dict[str, Any], response: str, task_name: str):
+    def _save_interaction_log(self, data: Dict[str, Any], response: str, task_name: str, reasoning_content: str = "", usage_info: Optional[Dict[str, Any]] = None):
         """保存完整的请求和响应内容"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         # 简单的文件名清理
@@ -362,6 +379,9 @@ class DeepSeekAnalyzer:
                 f.write(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"Task: {task_name}\n")
                 f.write(f"Model: {data.get('model', 'unknown')}\n")
+                if usage_info:
+                    f.write(f"Token Usage: Prompt {usage_info.get('prompt_tokens', 0)}, Completion {usage_info.get('completion_tokens', 0)}, Total {usage_info.get('total_tokens', 0)}\n")
+                
                 f.write("="*40 + " REQUEST " + "="*40 + "\n")
                 
                 if 'messages' in data:
@@ -373,6 +393,10 @@ class DeepSeekAnalyzer:
                         f.write(content + "\n")
                 else:
                     f.write(json.dumps(data, ensure_ascii=False, indent=2))
+
+                if reasoning_content:
+                    f.write("\n" + "="*40 + " REASONING " + "="*40 + "\n\n")
+                    f.write(reasoning_content + "\n")
 
                 f.write("\n" + "="*40 + " RESPONSE " + "="*40 + "\n\n")
                 f.write(response + "\n")
