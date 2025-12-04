@@ -1,123 +1,157 @@
 #!/usr/bin/env python3
 """
 清除日记中的 AI 评价脚本
-功能：
-1. 备份所有日记到 log 目录下的带时间戳文件夹
-2. 遍历所有日记文件，移除 "AI 说" 及其之后的内容
+功能：备份日记并移除 "AI 说" 及其之后的内容
 """
 
-import shutil
 import re
+import shutil
 import sys
-from pathlib import Path
+from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import List
 
-# 添加当前目录到Python路径，以便导入模块
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import Config
 from logger import Logger
 
-def clear_ai_comments():
-    # 初始化日志
-    logger = Logger.get_logger("ClearAI")
-    Logger.log_separator(logger)
-    logger.info("🧹 开始执行清除 AI 评价任务")
+
+@dataclass
+class ClearResult:
+    """清理结果"""
+    processed: int = 0
+    skipped: int = 0
+    backup_dir: Path = None
+
+
+class AICleaner:
+    """AI 评价清理器"""
     
-    # 1. 创建备份
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_dir = Config.LOG_DIR / f"backup_{timestamp}"
+    AI_VARIANTS = ("AI 说", "AI说", "AI评价", "AI建议")
+    HEADER_PATTERN = re.compile(
+        r'^#+\s*(' + '|'.join(map(re.escape, AI_VARIANTS)) + r')\s*$',
+        re.IGNORECASE
+    )
     
-    try:
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        logger.info(f"📦 创建备份目录: {backup_dir}")
-    except Exception as e:
-        logger.error(f"创建备份目录失败: {e}")
-        return
-
-    # 获取所有日记文件
-    diary_dirs = [Config.DIARY_DIR, Config.DIARY_OLD_DIR]
-    files_to_process = []
-
-    for d_dir in diary_dirs:
-        if d_dir.exists():
-            for f in d_dir.glob("*.md"):
-                files_to_process.append(f)
-        else:
-            logger.warning(f"目录不存在: {d_dir}")
-
-    if not files_to_process:
-        logger.warning("没有找到任何日记文件")
-        return
-
-    logger.info(f"🔍 找到 {len(files_to_process)} 个日记文件，准备备份...")
-
-    # 2. 备份文件
-    backup_count = 0
-    for file_path in files_to_process:
+    def __init__(self):
+        self.logger = Logger.get_logger("ClearAI")
+    
+    def run(self) -> None:
+        """执行清理任务"""
+        Logger.log_separator(self.logger)
+        self.logger.info("🧹 开始执行清除 AI 评价任务")
+        
+        # 收集文件
+        files = self._collect_files()
+        if not files:
+            self.logger.warning("没有找到任何日记文件")
+            return
+        
+        self.logger.info(f"🔍 找到 {len(files)} 个日记文件")
+        
+        # 备份
+        backup_dir = self._backup_files(files)
+        if not backup_dir:
+            return
+        
+        # 清理
+        result = self._clear_files(files)
+        result.backup_dir = backup_dir
+        
+        self._print_summary(result)
+    
+    def _collect_files(self) -> List[Path]:
+        """收集所有日记文件"""
+        files = []
+        for diary_dir in (Config.DIARY_DIR, Config.DIARY_OLD_DIR):
+            if diary_dir.exists():
+                files.extend(diary_dir.glob("*.md"))
+            else:
+                self.logger.warning(f"目录不存在: {diary_dir}")
+        return files
+    
+    def _backup_files(self, files: List[Path]) -> Path:
+        """备份文件到 log 目录"""
+        backup_dir = Config.LOG_DIR / f"backup_{datetime.now():%Y%m%d_%H%M%S}"
+        
         try:
-            shutil.copy2(file_path, backup_dir / file_path.name)
-            backup_count += 1
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            self.logger.info(f"📦 创建备份目录: {backup_dir}")
         except Exception as e:
-            logger.error(f"备份文件失败 {file_path.name}: {e}")
-            # 如果备份失败，是否继续？为了安全起见，最好停止或跳过该文件
-            # 这里选择跳过该文件的处理
-            files_to_process.remove(file_path)
-
-    logger.info(f"✅ 成功备份 {backup_count} 个文件")
-    Logger.log_separator(logger)
-
-    # 3. 清除 AI 评价
-    ai_variants = ["AI 说", "AI说", "AI评价", "AI建议"]
-    # 匹配行首的标题，如 "## AI 说", "# AI评价" 等
-    pattern_str = r'^#+\s*(' + '|'.join(map(re.escape, ai_variants)) + r')\s*$'
-    header_pattern = re.compile(pattern_str, re.IGNORECASE)
-
-    processed_count = 0
-    skipped_count = 0
-
-    for file_path in files_to_process:
+            self.logger.error(f"创建备份目录失败: {e}")
+            return None
+        
+        count = 0
+        for f in files:
+            try:
+                shutil.copy2(f, backup_dir / f.name)
+                count += 1
+            except Exception as e:
+                self.logger.error(f"备份失败 {f.name}: {e}")
+        
+        self.logger.info(f"✅ 成功备份 {count} 个文件")
+        Logger.log_separator(self.logger)
+        return backup_dir
+    
+    def _clear_files(self, files: List[Path]) -> ClearResult:
+        """清理文件中的 AI 评价"""
+        result = ClearResult()
+        
+        for file_path in files:
+            if self._clear_single_file(file_path):
+                result.processed += 1
+                self.logger.info(f"✂️  已清除: {file_path.name}")
+            else:
+                result.skipped += 1
+        
+        return result
+    
+    def _clear_single_file(self, file_path: Path) -> bool:
+        """清理单个文件，返回是否有修改"""
         try:
-            # 读取内容
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            
+            lines = file_path.read_text(encoding='utf-8').splitlines(keepends=True)
             new_lines = []
-            found_ai = False
             
             for line in lines:
-                # 检查是否是 AI 评价的标题行
-                if header_pattern.match(line.strip()):
-                    found_ai = True
-                    break # 找到后直接停止，丢弃之后的所有内容
+                if self.HEADER_PATTERN.match(line.strip()):
+                    break
                 new_lines.append(line)
-            
-            if found_ai:
-                # 移除末尾的空行，保持整洁
-                while new_lines and new_lines[-1].strip() == "":
-                    new_lines.pop()
-                
-                # 写回文件
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.writelines(new_lines)
-                    # 确保文件末尾有一个换行符（如果文件不为空）
-                    if new_lines:
-                        f.write('\n')
-                
-                processed_count += 1
-                logger.info(f"✂️  已清除: {file_path.name}")
             else:
-                skipped_count += 1
-                # logger.debug(f"未发现 AI 评价: {file_path.name}")
-
+                return False  # 未找到 AI 标记
+            
+            # 移除末尾空行
+            while new_lines and not new_lines[-1].strip():
+                new_lines.pop()
+            
+            # 写回（确保末尾换行）
+            content = ''.join(new_lines)
+            if content and not content.endswith('\n'):
+                content += '\n'
+            file_path.write_text(content, encoding='utf-8')
+            return True
+            
         except Exception as e:
-            logger.error(f"处理文件出错 {file_path.name}: {e}")
+            self.logger.error(f"处理出错 {file_path.name}: {e}")
+            return False
+    
+    def _print_summary(self, result: ClearResult) -> None:
+        """打印处理结果摘要"""
+        Logger.log_separator(self.logger)
+        self.logger.info("🎉 处理完成")
+        self.logger.info(f"   - 已清除: {result.processed} 个文件")
+        self.logger.info(f"   - 未发现/跳过: {result.skipped} 个文件")
+        self.logger.info(f"   - 备份位置: {result.backup_dir}")
 
-    Logger.log_separator(logger)
-    logger.info(f"🎉 处理完成")
-    logger.info(f"   - 已清除: {processed_count} 个文件")
-    logger.info(f"   - 未发现/跳过: {skipped_count} 个文件")
-    logger.info(f"   - 备份位置: {backup_dir}")
+
+def clear_ai_comments():
+    """入口函数"""
+    AICleaner().run()
+
+
+if __name__ == "__main__":
+    clear_ai_comments()
     Logger.log_separator(logger)
 
 if __name__ == "__main__":

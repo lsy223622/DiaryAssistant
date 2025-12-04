@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
-"""
-日志管理模块
-"""
+"""日志管理模块"""
 
 import logging
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Dict, Optional
 
 from config import Config
 
@@ -14,7 +12,8 @@ from config import Config
 class Logger:
     """统一日志管理类"""
     
-    _loggers = {}
+    _loggers: Dict[str, logging.Logger] = {}
+    _CONSOLE_FORMAT = "%(levelname)s: %(message)s"
     
     @classmethod
     def get_logger(cls, name: str = "DiaryAssistant") -> logging.Logger:
@@ -25,39 +24,40 @@ class Logger:
         logger = logging.getLogger(name)
         logger.setLevel(getattr(logging, Config.LOG_LEVEL))
         
-        # 避免重复添加handler
-        if logger.handlers:
-            return logger
-        
-        # 控制台handler
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
-        console_formatter = logging.Formatter(
-            "%(levelname)s: %(message)s"
-        )
-        console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
-        
-        # 文件handler
-        log_file = Config.LOG_DIR / f"app_{datetime.now().strftime('%Y%m%d')}.log"
-        try:
-            file_handler = logging.FileHandler(log_file, encoding='utf-8')
-            file_handler.setLevel(logging.DEBUG)
-            file_formatter = logging.Formatter(
-                Config.LOG_FORMAT,
-                datefmt=Config.LOG_DATE_FORMAT
-            )
-            file_handler.setFormatter(file_formatter)
-            logger.addHandler(file_handler)
-        except Exception as e:
-            logger.warning(f"无法创建日志文件: {e}")
+        if not logger.handlers:
+            cls._setup_handlers(logger)
         
         cls._loggers[name] = logger
         return logger
     
     @classmethod
-    def log_separator(cls, logger: logging.Logger, char: str = "=", length: Optional[int] = None):
+    def _setup_handlers(cls, logger: logging.Logger) -> None:
+        """设置日志处理器"""
+        # 控制台
+        console = logging.StreamHandler(sys.stdout)
+        console.setLevel(logging.INFO)
+        console.setFormatter(logging.Formatter(cls._CONSOLE_FORMAT))
+        logger.addHandler(console)
+        
+        # 文件
+        cls._add_file_handler(logger)
+    
+    @classmethod
+    def _add_file_handler(cls, logger: logging.Logger) -> None:
+        """添加文件处理器"""
+        log_file = Config.LOG_DIR / f"app_{datetime.now():%Y%m%d}.log"
+        try:
+            handler = logging.FileHandler(log_file, encoding='utf-8')
+            handler.setLevel(logging.DEBUG)
+            handler.setFormatter(logging.Formatter(
+                Config.LOG_FORMAT, datefmt=Config.LOG_DATE_FORMAT
+            ))
+            logger.addHandler(handler)
+        except Exception as e:
+            logger.warning(f"无法创建日志文件: {e}")
+    
+    @classmethod
+    def log_separator(cls, logger: logging.Logger, char: str = "=", 
+                      length: Optional[int] = None) -> None:
         """打印分隔线"""
-        if length is None:
-            length = Config.SEPARATOR_LENGTH
-        logger.info(char * length)
+        logger.info(char * (length or Config.SEPARATOR_LENGTH))
