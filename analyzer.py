@@ -36,7 +36,7 @@ class ApiClient:
         self.interaction_log_dir.mkdir(parents=True, exist_ok=True)
     
     def send_request(self, messages: List[Dict], temperature: float = 1.0, 
-                     max_tokens: int = 4000, task_name: str = "请求",
+                     max_tokens: int = Config.API_MAX_TOKENS, task_name: str = "请求",
                      json_response: bool = False) -> Optional[str]:
         """发送 API 请求并返回内容"""
         data = {
@@ -229,7 +229,7 @@ class MemoryManager:
             {"role": "user", "content": f"当前记忆：\n{facts_text}\n\n请整理使总字数小于 2000 字。"}
         ]
         
-        content = self.api_client.send_request(messages, temperature=0.6, max_tokens=4000,
+        content = self.api_client.send_request(messages, temperature=1.0, max_tokens=Config.API_MAX_TOKENS,
                                                 task_name="记忆整理", json_response=True)
         return self._parse_memory_response(content)
     
@@ -250,7 +250,7 @@ class MemoryManager:
             {"role": "user", "content": f"当前记忆：\n{facts_text}"}
         ]
         
-        content = self.api_client.send_request(messages, temperature=0.5, max_tokens=4000,
+        content = self.api_client.send_request(messages, temperature=1.0, max_tokens=Config.API_MAX_TOKENS,
                                                 task_name="记忆精简", json_response=True)
         new_facts = self._parse_memory_response(content)
         if new_facts and sum(len(f) for f in new_facts) >= 1400:
@@ -438,7 +438,7 @@ class DeepSeekAnalyzer:
 请生成周总结。"""}
         ]
         
-        return self.api_client.send_request(messages, temperature=0.8, max_tokens=4000, task_name="周总结生成")
+        return self.api_client.send_request(messages, temperature=1.0, max_tokens=Config.API_MAX_TOKENS, task_name="周总结生成")
     
     def generate_daily_evaluation(self, current_diary: DiaryEntry, 
                                    context_diaries: List[DiaryEntry], 
@@ -462,7 +462,7 @@ class DeepSeekAnalyzer:
 请为今天的日记写一段评价和建议。"""}
         ]
         
-        content = self.api_client.send_request(messages, temperature=1.0, max_tokens=2000, task_name="每日评价生成")
+        content = self.api_client.send_request(messages, temperature=1.5, max_tokens=Config.API_MAX_TOKENS, task_name="每日评价生成")
         return self._process_memory_updates(content)
     
     def generate_weekly_analysis(self, week_diaries: List[DiaryEntry], 
@@ -511,7 +511,7 @@ class DeepSeekAnalyzer:
 """}
         ]
         
-        content = self.api_client.send_request(messages, temperature=1.0, max_tokens=Config.API_MAX_TOKENS, task_name="周分析生成")
+        content = self.api_client.send_request(messages, temperature=1.5, max_tokens=Config.API_MAX_TOKENS, task_name="周分析生成")
         content = self._process_memory_updates(content)
         
         if content:
