@@ -51,9 +51,7 @@ class DiaryAssistant:
     
     def _log_paths(self) -> None:
         """记录路径配置"""
-        self.logger.info(f"日记目录: {Config.DIARY_DIR}, {Config.DIARY_OLD_DIR}")
-        self.logger.debug(f"Base Dir: {Config.BASE_DIR}")
-        self.logger.info(f"输出目录: {Config.OUTPUT_DIR}")
+        self.logger.info(f"日记目录: {Config.BASE_DIR}")
     
     def _init_components(self) -> bool:
         """初始化组件"""
