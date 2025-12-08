@@ -408,13 +408,13 @@ class ContextBuilder:
     def build_profile_context(user_profile: Optional[UserProfile]) -> str:
         if not user_profile:
             return ""
-        return f"\n## 👤 用户画像 (长期记忆)\n{user_profile.get_profile_text()}\n"
+        return f"\n## 用户画像 (长期记忆)\n{user_profile.get_profile_text()}\n"
     
     @staticmethod
     def build_historical_summaries(weekly_summaries: List[tuple]) -> str:
         if not weekly_summaries:
             return ""
-        parts = ["\n## 📚 历史周总结\n"]
+        parts = ["\n## 历史周总结\n"]
         for week_info, summary in weekly_summaries:
             header = f"### {week_info.year}年第{week_info.week}周 ({week_info.start_date.strftime('%m月%d日')}-{week_info.end_date.strftime('%m月%d日')})"
             parts.extend([header, "", summary, "", "="*50, ""])
@@ -424,7 +424,7 @@ class ContextBuilder:
     def build_diaries_context(diaries: List[DiaryEntry], title: str = "本周日记", include_todos: bool = True) -> str:
         if not diaries:
             return ""
-        parts = [f"\n## 📝 {title}\n"]
+        parts = [f"\n## {title}\n"]
         for diary in diaries:
             parts.extend([diary.format_for_ai(include_todos=include_todos), "", "="*50, ""])
         return "\n".join(parts)
