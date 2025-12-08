@@ -132,7 +132,10 @@ class DiaryAssistant:
         historical = self.weekly_manager.get_historical_summaries(diary.date)
         context = self._get_context_diaries(diary)
         
-        evaluation = self.analyzer.generate_daily_evaluation(diary, context, historical)
+        # 获取截至当前日期的所有日记，用于构建完整的待办列表
+        all_diaries_until_now = [d for d in self.diaries if d.date <= diary.date]
+        
+        evaluation = self.analyzer.generate_daily_evaluation(diary, context, historical, all_diaries=all_diaries_until_now)
         if not evaluation:
             self.logger.error("生成评价失败")
             return False
@@ -153,7 +156,11 @@ class DiaryAssistant:
             self.logger.info(f"📅 检测到周日 ({diary.date:%Y-%m-%d})，正在生成周分析报告...")
             context = self._get_context_diaries(diary)
             historical = self.weekly_manager.get_historical_summaries(diary.date)
-            self.analyzer.generate_weekly_analysis(context, historical)
+            
+            # 获取截至当前日期的所有日记
+            all_diaries_until_now = [d for d in self.diaries if d.date <= diary.date]
+            
+            self.analyzer.generate_weekly_analysis(context, historical, all_diaries=all_diaries_until_now)
         
         # 暂停确认
         if Config.PAUSE_AFTER_DAILY_EVALUATION:

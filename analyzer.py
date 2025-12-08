@@ -330,7 +330,9 @@ class PromptTemplates:
 }
 ```
 如果没有更新，则不需要输出此 JSON 块。
-注意：只记录长期有价值的信息，"remove" 和 "update" 中的 "old" 必须与"用户画像"中的文本完全一致！！'''
+注意：
+- 只记录长期有价值的信息。
+- "remove" 和 "update" 中的 "old" 必须与"用户画像"中的文本**完全一致**！！'''
 
     @staticmethod
     def weekly_summary_system() -> str:
@@ -367,7 +369,7 @@ class PromptTemplates:
 你是一位贴心的日记助手。
 
 ## 任务
-阅读用户的历史周总结、本周日记以及用户画像，为**今天**的日记生成一份简短的评价和建议。
+阅读用户的历史周总结、本周日记、待办事项汇总以及用户画像，为**今天**的日记生成一份简短的评价和建议。
 
 ## 要求
 1. **篇幅限制**：800字以内。
@@ -384,7 +386,7 @@ class PromptTemplates:
 你是一位专业的个人成长顾问。
 
 ## 任务
-基于历史周总结、本周完整的日记以及用户画像，对**本周**进行深度分析，并提出建议。
+基于历史周总结、本周完整的日记、待办事项汇总以及用户画像，对**本周**进行深度分析，并提出建议。
 
 ## 要求
 1. **深度洞察**：发现行为模式和心理变化
@@ -419,13 +421,71 @@ class ContextBuilder:
         return "\n".join(parts)
     
     @staticmethod
-    def build_diaries_context(diaries: List[DiaryEntry], title: str = "本周日记") -> str:
+    def build_diaries_context(diaries: List[DiaryEntry], title: str = "本周日记", include_todos: bool = True) -> str:
         if not diaries:
             return ""
         parts = [f"\n## 📝 {title}\n"]
         for diary in diaries:
-            parts.extend([diary.format_for_ai(), "", "="*50, ""])
+            parts.extend([diary.format_for_ai(include_todos=include_todos), "", "="*50, ""])
         return "\n".join(parts)
+
+    @staticmethod
+    def build_todo_context(diaries: List[DiaryEntry]) -> str:
+        """构建待办事项上下文"""
+        parts = []
+        has_todos = False
+        today = datetime.now().date()
+        
+        for diary in diaries:
+            if not diary.todos:
+                continue
+            
+            valid_todos = []
+            for todo in diary.todos:
+                # 1. 过滤掉没有内容的待办
+                if not re.sub(r'^\[\s*[xX]?\s*\]', '', todo).strip():
+                    continue
+                
+                # 2. 处理已完成的待办 ([x] 或 [X])
+                if re.match(r'^\[\s*[xX]\s*\]', todo):
+                    # 查找完成日期 ✅ YYYY-MM-DD
+                    match = re.search(r'✅\s*(\d{4}-\d{2}-\d{2})', todo)
+                    if match:
+                        try:
+                            completion_date = datetime.strptime(match.group(1), '%Y-%m-%d').date()
+                            # 如果完成日期距离现在超过 7 天，则忽略
+                            if (today - completion_date).days > 7:
+                                continue
+                        except ValueError:
+                            continue
+                    else:
+                        # 已完成但没有完成日期，忽略
+                        continue
+                
+                valid_todos.append(todo)
+            
+            if not valid_todos:
+                continue
+            
+            has_todos = True
+            date_str = diary.date.strftime('%Y-%m-%d')
+            parts.append(f"### {date_str}")
+            for todo in valid_todos:
+                parts.append(f"- {todo}")
+            parts.append("")
+        
+        if not has_todos:
+            return ""
+            
+        legend = """仅包含所有未完成和近一周完成的待办事项。
+### 待办标记说明
+- 三级标题：待办创建日期
+- 优先级：🔺(最高) > ⏫(高) > 🔼(中) > (无标记)(普通) > 🔽(低) > ⏬(最低)
+- 📅：截止日期
+- ✅：完成日期
+- ❌：放弃/失败日期"""
+        
+        return f"\n## 📋 待办事项汇总\n{legend}\n\n" + "\n".join(parts)
 
 
 # ============================================================
@@ -470,20 +530,27 @@ class DeepSeekAnalyzer:
     
     def generate_daily_evaluation(self, current_diary: DiaryEntry, 
                                    context_diaries: List[DiaryEntry], 
-                                   weekly_summaries: List[tuple]) -> Optional[str]:
+                                   weekly_summaries: List[tuple],
+                                   all_diaries: Optional[List[DiaryEntry]] = None) -> Optional[str]:
         """生成每日评价和建议"""
         self.logger.info(f"正在为 {current_diary.date.strftime('%Y-%m-%d')} 生成评价...")
         
         # 构建上下文
         profile_context = ContextBuilder.build_profile_context(self.user_profile)
         historical_context = ContextBuilder.build_historical_summaries(weekly_summaries)
-        current_week_content = ContextBuilder.build_diaries_context(context_diaries, "本周日记（截至今日）")
+        current_week_content = ContextBuilder.build_diaries_context(context_diaries, "本周日记（截至今日）", include_todos=False)
+        
+        # 使用所有日记构建待办上下文，如果未提供则回退到 context_diaries
+        todos_source = all_diaries if all_diaries else context_diaries
+        todo_context = ContextBuilder.build_todo_context(todos_source)
         
         messages = [
             {"role": "system", "content": PromptTemplates.daily_evaluation_system(profile_context)},
             {"role": "user", "content": f"""今天是 {current_diary.date.strftime('%Y年%m月%d日')}。
 
 {historical_context}
+
+{todo_context}
 
 {current_week_content}
 
@@ -494,14 +561,19 @@ class DeepSeekAnalyzer:
         return self._process_memory_updates(content)
     
     def generate_weekly_analysis(self, week_diaries: List[DiaryEntry], 
-                                  historical_summaries: List[tuple]) -> Optional[str]:
+                                  historical_summaries: List[tuple],
+                                  all_diaries: Optional[List[DiaryEntry]] = None) -> Optional[str]:
         """生成每周分析建议（在周日触发）"""
         self.logger.info(f"正在生成周分析 (历史周总结: {len(historical_summaries)} 周, 本周日记: {len(week_diaries)} 篇)")
         
         # 构建上下文
         profile_context = ContextBuilder.build_profile_context(self.user_profile)
         historical_context = ContextBuilder.build_historical_summaries(historical_summaries)
-        current_week_content = ContextBuilder.build_diaries_context(week_diaries, "本周日记")
+        current_week_content = ContextBuilder.build_diaries_context(week_diaries, "本周日记", include_todos=False)
+        
+        # 使用所有日记构建待办上下文，如果未提供则回退到 week_diaries
+        todos_source = all_diaries if all_diaries else week_diaries
+        todo_context = ContextBuilder.build_todo_context(todos_source)
         
         end_date = week_diaries[-1].date.strftime('%Y年%m月%d日')
         
@@ -510,6 +582,8 @@ class DeepSeekAnalyzer:
             {"role": "user", "content": f"""本周结束日期：{end_date}。
 
 {historical_context}
+
+{todo_context}
 
 {current_week_content}
 

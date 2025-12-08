@@ -130,13 +130,16 @@ class DiaryEntry:
     def __str__(self) -> str:
         return f"DiaryEntry({self.date.strftime('%Y-%m-%d')})"
 
-    def format_for_ai(self) -> str:
+    def format_for_ai(self, include_todos: bool = True) -> str:
         """格式化日记内容，用于发送给 AI"""
-        sections = [
-            ("## 待办事项", self.todos),
+        sections = []
+        if include_todos:
+            sections.append(("## 待办事项", self.todos))
+        
+        sections.extend([
             ("## 记录", self.records),
             ("## 想法", self.thoughts),
-        ]
+        ])
         
         parts = [f"# {self.date.strftime('%Y年%m月%d日')} {self.title}", ""]
         for header, items in sections:
