@@ -332,6 +332,7 @@ class PromptTemplates:
 如果没有更新，则不需要输出此 JSON 块。
 注意：
 - 只记录长期有价值的信息。
+- 只能编辑以上"用户画像"中的内容。
 - "remove" 和 "update" 中的 "old" 必须与"用户画像"中的文本**完全一致**！！'''
 
     @staticmethod
