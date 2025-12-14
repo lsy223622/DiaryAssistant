@@ -36,6 +36,7 @@ class Config:
     
     # ===== 调试配置 =====
     PAUSE_AFTER_DAILY_EVALUATION: bool = False
+    ENABLE_MEMORY_CONSOLIDATION: bool = True
     
     # ===== 需要创建的目录列表 =====
     _REQUIRED_DIRS = ("OUTPUT_DIR", "WEEKLY_SUMMARY_DIR", "LOG_DIR")

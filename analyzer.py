@@ -178,6 +178,9 @@ class MemoryManager:
     
     def check_and_optimize(self):
         """检查并优化记忆库大小"""
+        if not Config.ENABLE_MEMORY_CONSOLIDATION:
+            return
+
         current_length = self.user_profile.get_profile_length()
         if current_length <= 4000:
             return
