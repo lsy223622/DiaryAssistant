@@ -548,8 +548,6 @@ class DeepSeekAnalyzer:
             self.logger.warning(f"{week_info} 没有日记")
             return None
         
-        self.logger.info(f"正在生成 {week_info} 的总结...")
-        
         week_content = week_info.format_for_ai()
         start_date = week_info.start_date.strftime('%Y年%m月%d日')
         end_date = week_info.end_date.strftime('%Y年%m月%d日')
